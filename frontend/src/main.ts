@@ -349,16 +349,15 @@ const sessionTabBar = createSessionTabBar({
   stateLabel: (state) => localize(SESSION_STATE_LABEL[state]),
   onActivate: (id) => activateSession(id),
   onClose: (id) => closeSessionTab(id),
-  onNew: async () => {
+  onNew: (anchor) => {
     const session = claimPlaceholderSession();
     setFrontSession(session);
     setPanelOpen(true);
-    const host = await openHostPicker();
-    if (host) {
+    openHostPicker(anchor, (host) => {
       // 填入所选主机的配置（不含凭据，需用户自行输入密码/私钥后连接）。
       void applyProfile(host);
-    }
-    requestAnimationFrame(() => ui.password.focus());
+      requestAnimationFrame(() => ui.password.focus());
+    });
   },
 });
 

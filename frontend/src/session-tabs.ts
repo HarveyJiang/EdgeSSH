@@ -14,8 +14,8 @@ export interface SessionTabBarOptions {
   onActivate: (id: string) => void;
   /** Called by the tab's close button — the caller owns the teardown. */
   onClose: (id: string) => void;
-  /** Called when the "+" new-session button is activated. */
-  onNew?: () => void;
+  /** Called when the "+" new-session button is activated, with the button as anchor for positioning. */
+  onNew?: (anchor: HTMLElement) => void;
   localize: (zh: string, en: string) => string;
   /** Human-readable state copy for the status dot's accessible text. */
   stateLabel: (state: ConnectionState) => string;
@@ -36,7 +36,7 @@ export function createSessionTabBar(options: SessionTabBarOptions): SessionTabBa
     const newButton = target?.closest<HTMLElement>('.session-tab-new');
     if (newButton) {
       clickEvent.stopPropagation();
-      options.onNew?.();
+      options.onNew?.(newButton);
       return;
     }
     const closeButton = target?.closest<HTMLElement>(`.${CLOSE_CLASS}`);
@@ -54,7 +54,7 @@ export function createSessionTabBar(options: SessionTabBarOptions): SessionTabBa
     const newButton = target?.closest<HTMLElement>('.session-tab-new');
     if (newButton && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) {
       keyEvent.preventDefault();
-      options.onNew?.();
+      options.onNew?.(newButton);
       return;
     }
     const tab = target?.closest<HTMLElement>(`.${TAB_CLASS}`);
