@@ -1,6 +1,6 @@
 import { api, type CloudHost } from './cloud-api';
 
-/** 轻量非模态主机选择浮层：点 "+" 弹出，列出 host:port + 备注，选中后回调。 */
+/** 轻量非模态主机选择浮层：点 "+" 弹出，列出 host:port + 备注，选中后回调。不遮挡页面，不阻塞交互。 */
 export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) => void): void {
   // 移除已存在的浮层，避免多次点击堆叠
   const existing = document.querySelector('.host-picker-popover');
@@ -16,7 +16,7 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   `;
   document.body.appendChild(popover);
 
-  // 把浮层贴在 "+" 按钮下方
+  // 贴在 "+" 按钮下方弹出
   const rect = anchor.getBoundingClientRect();
   popover.style.left = `${rect.left}px`;
   popover.style.top = `${rect.bottom + 6}px`;
@@ -56,7 +56,6 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   api<{ hosts: CloudHost[] }>('/api/hosts').then(({ hosts: h }) => {
     hosts = h;
     render(h);
-    search.focus();
   }).catch(() => {
     list.replaceChildren();
     const err = document.createElement('div');
@@ -74,9 +73,18 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
     ));
   });
 
-  const close = (): void => { popover.remove(); };
-  // 点击浮层内部不冒泡；点击页面其他地方或按 Esc 关闭
+  // 点击浮层内部不冒泡，避免触发文档的关闭逻辑
   popover.addEventListener('click', (event) => event.stopPropagation());
-  document.addEventListener('click', close, { once: true });
+
+  // 延迟一个宏任务再监听文档点击，避免当前 "+" 的 click 事件冒泡到文档就把刚弹出的浮层关掉
+  let closed = false;
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    popover.remove();
+  };
+  setTimeout(() => {
+    document.addEventListener('click', close, { once: true });
+  }, 0);
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
 }

@@ -81,7 +81,7 @@ body[data-view='dashboard'] { overflow-y: auto; background: var(--home-bg); }
 #dashboard .host-filters button.active { color: var(--home-ink); border-color: var(--home-accent); }
 .host-list { min-height: 282px; max-height: 480px; overflow-y: auto; scrollbar-width: thin; }
 .host-group-heading { font-size: 12px; font-weight: 650; margin: 18px 0 9px; color: var(--home-muted); }
-.host-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 190px auto auto 24px; align-items: center; gap: 10px; border: 1px solid var(--home-line); border-radius: 8px; margin-bottom: 9px; padding: 14px 12px; background: var(--home-surface); }
+.host-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 190px auto auto 24px; align-items: center; gap: 10px; border: 1px solid var(--home-line); border-radius: 8px; margin-bottom: 9px; padding: 14px 12px; background: var(--home-surface); cursor: pointer; }
 .host-row:hover { border-color: var(--home-accent); background: var(--home-accent-soft); }
 .host-symbol { display: grid; place-items: center; border-radius: 8px; background: var(--home-bg); width: 36px; height: 36px; color: var(--home-muted); overflow: hidden; }
 .host-symbol svg { width: 22px; height: 22px; }

@@ -352,11 +352,13 @@ const sessionTabBar = createSessionTabBar({
   onNew: (anchor) => {
     const session = claimPlaceholderSession();
     setFrontSession(session);
-    setPanelOpen(true);
     openHostPicker(anchor, (host) => {
       // 填入所选主机的配置（不含凭据，需用户自行输入密码/私钥后连接）。
-      void applyProfile(host);
-      requestAnimationFrame(() => ui.password.focus());
+      void applyProfile(host).then(() => {
+        // 选定主机后再打开连接面板，表单已回填，聚焦密码输入框。
+        setPanelOpen(true);
+        requestAnimationFrame(() => ui.password.focus());
+      });
     });
   },
 });
