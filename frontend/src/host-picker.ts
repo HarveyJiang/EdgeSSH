@@ -8,21 +8,19 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
 
   const popover = document.createElement('div');
   popover.className = 'host-picker-popover';
-  popover.innerHTML = `
-    <div class="host-picker-header">
-      <input type="search" class="host-picker-search" placeholder="搜索主机、IP 或备注" aria-label="搜索主机">
-    </div>
-    <div class="host-picker-list" role="listbox" aria-label="主机列表"></div>
-  `;
-  document.body.appendChild(popover);
+  popover.setAttribute('role', 'listbox');
+  popover.setAttribute('aria-label', '主机列表');
+  popover.innerHTML = `<div class="host-picker-list"></div>`;
 
-  // 贴在 "+" 按钮下方弹出：先设定位置再挂载，避免闪现到左上角
+  // 贴在 "+" 按钮正下方弹出：先设 left/top 再挂载，避免闪现到左上角
   const rect = anchor.getBoundingClientRect();
+  popover.style.position = 'fixed';
   popover.style.left = `${rect.left}px`;
   popover.style.top = `${rect.bottom + 6}px`;
   popover.style.transform = 'none';
 
-  const search = popover.querySelector('.host-picker-search') as HTMLInputElement;
+  document.body.appendChild(popover);
+
   const list = popover.querySelector('.host-picker-list')!;
 
   let hosts: CloudHost[] = [];
@@ -41,9 +39,10 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
       row.type = 'button';
       row.className = 'host-picker-row';
       row.setAttribute('role', 'option');
+      // 一行显示：host:port 左侧，name · group 右侧，全部一行不换行
       row.innerHTML = `
-        <div class="host-picker-address">${host.host}:${host.port}</div>
-        <div class="host-picker-note">${host.name} · ${host.group}</div>
+        <span class="host-picker-address">${host.host}:${host.port}</span>
+        <span class="host-picker-note">${host.name} · ${host.group}</span>
       `;
       row.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -63,15 +62,6 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
     err.className = 'host-picker-empty';
     err.textContent = '加载服务器列表失败，请先登录';
     list.append(err);
-  });
-
-  search.addEventListener('input', () => {
-    const q = search.value.toLowerCase();
-    render(hosts.filter((host) =>
-      host.name.toLowerCase().includes(q)
-      || host.host.toLowerCase().includes(q)
-      || host.group.toLowerCase().includes(q)
-    ));
   });
 
   // 点击浮层内部不冒泡，避免触发文档的关闭逻辑
