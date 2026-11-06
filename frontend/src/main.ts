@@ -1398,6 +1398,8 @@ function setState(state: ConnectionState, label?: string): void {
   renderConnectControl();
   renderSessionTabs();
   terminalTools?.setConnected(state === 'connected');
+  // 连接成功后自动收起左侧连接面板，把屏幕留给终端。
+  if (state === 'connected') setPanelOpen(false);
 }
 
 function event(message: string, category = 'session', error = false, alternate?: string): void {
