@@ -353,12 +353,9 @@ const sessionTabBar = createSessionTabBar({
     const session = claimPlaceholderSession();
     setFrontSession(session);
     openHostPicker(anchor, (host) => {
-      // 填入所选主机的配置（不含凭据，需用户自行输入密码/私钥后连接）。
-      void applyProfile(host).then(() => {
-        // 选定主机后再打开连接面板，表单已回填，聚焦密码输入框。
-        setPanelOpen(true);
-        requestAnimationFrame(() => ui.password.focus());
-      });
+      // 选主机后直接尝试连接：有保存凭据即直接拨号并打开新页签终端；
+      // 没有凭据时 connect() 会报缺少凭据并显示表单错误，绝不打开左侧面板。
+      void applyProfile(host).then(() => void connect());
     });
   },
 });
@@ -1276,6 +1273,12 @@ function renderProfiles(): void {
     remove.setAttribute('aria-label', bilingual(`删除 ${displayName}`, `Delete ${displayName}`));
     remove.textContent = '\u00d7';
     card.append(main, remove);
+    // 双击左侧面板的主机卡片（非删除按钮）直接连接，在新页签打开终端。
+    card.addEventListener('dblclick', (dblEvent) => {
+      const target = dblEvent.target as HTMLElement | null;
+      if (target?.closest('button')) return;
+      void applyProfile(profile).then(() => void connect());
+    });
     ui.profileList.append(card);
   }
 }
