@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { createElement, Maximize, Minimize } from 'lucide';
+import { openHostPicker } from './host-picker';
 import { historyKey, historyLabel } from './history';
 import { normalizeHostAddress, sessionTargetKey, sessionTargetLabel } from './session-target';
 import { listHosts, hostCredentials, saveHost, removeHost, updateHostSystem, type CloudHost, type Credentials, type HostSystemInfo } from './cloud-api';
@@ -283,6 +284,8 @@ const ui = {
   liveOrbLabel: element<HTMLElement>('live-orb-label'),
   metricUptime: element<HTMLElement>('metric-uptime'),
   metricHostKey: element<HTMLElement>('metric-host-key'),
+  metricLatency: element<HTMLElement>('metric-latency'),
+  metricSpeed: element<HTMLElement>('metric-speed'),
   resourceNetwork: element<HTMLElement>('resource-network'),
   resourceNetworkIface: element<HTMLElement>('resource-network-iface'),
   resourceNetworkSelect: element<HTMLSelectElement>('resource-network-select'),
@@ -346,6 +349,17 @@ const sessionTabBar = createSessionTabBar({
   stateLabel: (state) => localize(SESSION_STATE_LABEL[state]),
   onActivate: (id) => activateSession(id),
   onClose: (id) => closeSessionTab(id),
+  onNew: async () => {
+    const session = claimPlaceholderSession();
+    setFrontSession(session);
+    setPanelOpen(true);
+    const host = await openHostPicker();
+    if (host) {
+      // 填入所选主机的配置（不含凭据，需用户自行输入密码/私钥后连接）。
+      void applyProfile(host);
+    }
+    requestAnimationFrame(() => ui.password.focus());
+  },
 });
 
 /** Create (once) and return the xterm host owned by this session. */
@@ -1460,17 +1474,50 @@ function updateUptime(): void {
     : `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 }
 
+function paintConnectionMetrics(session: SessionContext): void {
+  ui.metricLatency.textContent = session.latencyMs > 0 ? `${Math.round(session.latencyMs)} ms` : '-- ms';
+  ui.metricSpeed.textContent = `↑ ${formatNetworkRate(session.netTxRate)}  ↓ ${formatNetworkRate(session.netRxRate)}`;
+}
+
+function resetConnectionMetrics(session: SessionContext): void {
+  session.latencyMs = 0;
+  session.pingSentAt = null;
+  session.rxBytes = 0;
+  session.txBytes = 0;
+  session.rxLast = 0;
+  session.txLast = 0;
+  session.netRxRate = 0;
+  session.netTxRate = 0;
+  ui.metricLatency.textContent = '-- ms';
+  ui.metricSpeed.textContent = '↑0 B/s  ↓0 B/s';
+}
+
 function startTimers(session: SessionContext): void {
   stopTimers(session);
   session.startedAt = Date.now();
   // Ping every session so idle background shells stay alive; only the front one
   // paints the uptime readout, whose single widget answers to `ctx`.
   session.uptimeTimer = window.setInterval(() => {
-    if (isFront(session)) updateUptime();
+    // Whether or not this session is in front, roll the byte baseline every
+    // second so switching back to a background session never reports a fake
+    // one-shot spike. Only the front session repaints the shared widgets.
+    const rxRate = session.rxBytes - session.rxLast;
+    const txRate = session.txBytes - session.txLast;
+    session.rxLast = session.rxBytes;
+    session.txLast = session.txBytes;
+    session.netRxRate = Math.max(0, rxRate);
+    session.netTxRate = Math.max(0, txRate);
+    if (isFront(session)) {
+      updateUptime();
+      paintConnectionMetrics(session);
+    }
   }, 1_000);
   session.pingTimer = window.setInterval(() => {
     if (session.socket?.readyState !== WebSocket.OPEN) return;
-    session.socket.send(JSON.stringify({ type: 'ping' }));
+    session.pingSentAt = performance.now();
+    const text = JSON.stringify({ type: 'ping' });
+    session.txBytes += new TextEncoder().encode(text).length;
+    session.socket.send(text);
   }, PING_INTERVAL_MS);
   if (isFront(session)) updateUptime();
 }
@@ -1487,6 +1534,7 @@ function markReady(session: SessionContext, message = bilingual('交互式 Shell
   if (session.state === 'connected') return;
   setSessionState(session, 'connected');
   startTimers(session);
+  resetConnectionMetrics(session);
   if (session.initialCommand && !session.initialCommandSent) {
     session.initialCommandSent = true;
     const command = session.initialCommand;
@@ -1784,6 +1832,16 @@ async function handleSocketData(session: SessionContext, data: string | ArrayBuf
       return;
     }
     try {
+      // `pong` is the reply to our keepalive `ping`: measure round-trip time
+      // locally and do not route it through the server message handler.
+      if ((parsed as { type?: unknown }).type === 'pong') {
+        if (session.pingSentAt !== null) {
+          session.latencyMs = performance.now() - session.pingSentAt;
+          session.pingSentAt = null;
+          if (isFront(session)) paintConnectionMetrics(session);
+        }
+        return;
+      }
       handleServerMessage(session, parsed as ServerMessage);
     } catch {
       say(bilingual('处理服务器控制消息时发生错误。', 'Failed to process the server control message.'), 'protocol', true);
@@ -1794,6 +1852,7 @@ async function handleSocketData(session: SessionContext, data: string | ArrayBuf
     return;
   }
   const bytes = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new Uint8Array(data);
+  session.rxBytes += bytes.length;
   if (session.socket !== activeSocket || generation !== session.generation) return;
   // Terminal output always lands in this session's own xterm host, hidden or not.
   if (session.decoder.encoding === 'utf-8') session.terminal.write(bytes);
@@ -1802,7 +1861,9 @@ async function handleSocketData(session: SessionContext, data: string | ArrayBuf
 
 function sendTerminalData(data: string): void {
   if (ctx.socket?.readyState !== WebSocket.OPEN || ctx.state !== 'connected' || !data) return;
-  ctx.socket.send(JSON.stringify({ type: 'input', data }));
+  const text = JSON.stringify({ type: 'input', data });
+  ctx.txBytes += new TextEncoder().encode(text).length;
+  ctx.socket.send(text);
 }
 
 function failActiveConnection(session: SessionContext, activeSocket: WebSocket | null, closeReason: string, displayReason: LocalizedMessage): void {
@@ -1815,6 +1876,7 @@ function failActiveConnection(session: SessionContext, activeSocket: WebSocket |
   session.expectedFingerprint = '';
   session.rememberedFingerprint = '';
   stopTimers(session);
+  resetConnectionMetrics(session);
   session.fileManager.reset();
   session.fileTree?.setReady(false);
   session.processManager.reset();

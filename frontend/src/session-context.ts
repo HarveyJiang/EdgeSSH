@@ -79,7 +79,20 @@ export class SessionContext {
 
   uptimeTimer: number | null = null;
   pingTimer: number | null = null;
+  /** Timestamp (ms) when the last `ping` was sent, used to compute RTT against `pong`. */
+  pingSentAt: number | null = null;
+  /** Last measured round-trip time in milliseconds. */
+  latencyMs = 0;
   resizeFrame = 0;
+
+  /** Byte counters for connection throughput. */
+  rxBytes = 0;
+  txBytes = 0;
+  rxLast = 0;
+  txLast = 0;
+  /** Most recent per-second receive/transmit rate (bytes/s), refreshed each tick. */
+  netRxRate = 0;
+  netTxRate = 0;
 
   /** Normalised `user@host:port` used to match sessions against dashboard rows. */
   targetKey = '';

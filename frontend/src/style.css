@@ -1525,6 +1525,34 @@ button:disabled {
   outline-offset: -1px;
 }
 
+.session-tab-new {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--term-border);
+  border-radius: 6px;
+  background: var(--term-chrome);
+  color: var(--term-control-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  margin-left: 6px;
+}
+
+.session-tab-new:hover {
+  background: var(--term-hover);
+  border-color: var(--term-accent);
+}
+
+.session-tab-new:focus-visible {
+  outline: 2px solid var(--term-focus);
+  outline-offset: -1px;
+}
+
 .terminal-stage {
   position: relative;
   min-width: 0;

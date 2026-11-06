@@ -14,6 +14,8 @@ export interface SessionTabBarOptions {
   onActivate: (id: string) => void;
   /** Called by the tab's close button — the caller owns the teardown. */
   onClose: (id: string) => void;
+  /** Called when the "+" new-session button is activated. */
+  onNew?: () => void;
   localize: (zh: string, en: string) => string;
   /** Human-readable state copy for the status dot's accessible text. */
   stateLabel: (state: ConnectionState) => string;
@@ -31,6 +33,12 @@ export function createSessionTabBar(options: SessionTabBarOptions): SessionTabBa
 
   container.addEventListener('click', (clickEvent) => {
     const target = clickEvent.target as HTMLElement | null;
+    const newButton = target?.closest<HTMLElement>('.session-tab-new');
+    if (newButton) {
+      clickEvent.stopPropagation();
+      options.onNew?.();
+      return;
+    }
     const closeButton = target?.closest<HTMLElement>(`.${CLOSE_CLASS}`);
     if (closeButton?.dataset.session) {
       clickEvent.stopPropagation();
@@ -42,7 +50,14 @@ export function createSessionTabBar(options: SessionTabBarOptions): SessionTabBa
   });
 
   container.addEventListener('keydown', (keyEvent) => {
-    const tab = (keyEvent.target as HTMLElement | null)?.closest<HTMLElement>(`.${TAB_CLASS}`);
+    const target = keyEvent.target as HTMLElement | null;
+    const newButton = target?.closest<HTMLElement>('.session-tab-new');
+    if (newButton && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) {
+      keyEvent.preventDefault();
+      options.onNew?.();
+      return;
+    }
+    const tab = target?.closest<HTMLElement>(`.${TAB_CLASS}`);
     if (!tab) return;
     const tabs = [...container.querySelectorAll<HTMLElement>(`.${TAB_CLASS}`)];
     const index = tabs.indexOf(tab);
@@ -98,7 +113,19 @@ export function createSessionTabBar(options: SessionTabBarOptions): SessionTabBa
         return;
       }
       container.hidden = false;
-      container.replaceChildren(...sessions.map((session) => buildTab(session, session.id === activeId)));
+      const children = [...sessions.map((session) => buildTab(session, session.id === activeId)), buildNewButton()];
+      container.replaceChildren(...children);
     },
   };
+
+  function buildNewButton(): HTMLElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'session-tab-new';
+    button.setAttribute('role', 'button');
+    button.setAttribute('aria-label', localize('新建会话', 'New session'));
+    button.title = localize('新建会话', 'New session');
+    button.textContent = '+';
+    return button;
+  }
 }
