@@ -56,35 +56,11 @@ function byId<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-function commandPayload(value: string): string {
-  const normalized = value.replace(/\r\n?/g, '\n');
-  if (!normalized.trim()) return '';
-  const payload = normalized.replace(/\n/g, '\r');
-  return payload.endsWith('\r') ? payload : `${payload}\r`;
-}
-
-function currentLine(textarea: HTMLTextAreaElement): string {
-  const value = textarea.value.replace(/\r\n?/g, '\n');
-  const cursor = textarea.selectionStart;
-  const start = value.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
-  const end = value.indexOf('\n', cursor);
-  return value.slice(start, end < 0 ? value.length : end);
-}
-
 export function createTerminalTools(options: TerminalToolsOptions): TerminalToolsController {
   const root = byId<HTMLElement>('terminal-tools');
   const keyScroll = root.querySelector<HTMLElement>('.terminal-key-scroll')!;
   const modifierButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-terminal-modifier]')];
   const keyButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-terminal-key]')];
-  const editor = byId<HTMLElement>('command-editor');
-  const editorToggle = byId<HTMLButtonElement>('command-editor-toggle');
-  const editorClose = byId<HTMLButtonElement>('command-editor-close');
-  const textarea = byId<HTMLTextAreaElement>('command-editor-input');
-  const clearButton = byId<HTMLButtonElement>('command-editor-clear');
-  const insertButton = byId<HTMLButtonElement>('command-editor-insert');
-  const sendButton = byId<HTMLButtonElement>('command-editor-send');
-  const sendMenuButton = byId<HTMLButtonElement>('command-editor-send-menu');
-  const sendOptions = byId<HTMLElement>('command-send-options');
   let connected = false;
   let modifiers = { ctrl: false, alt: false };
 
@@ -107,38 +83,8 @@ export function createTerminalTools(options: TerminalToolsOptions): TerminalTool
   };
 
   const updateActions = () => {
-    const hasCommand = textarea.value.trim().length > 0;
     for (const button of keyButtons) button.disabled = !connected;
     for (const button of modifierButtons) button.disabled = !connected;
-    insertButton.disabled = !connected || !hasCommand;
-    sendButton.disabled = !connected || !hasCommand;
-    sendMenuButton.disabled = !connected || !hasCommand;
-  };
-
-  const setEditorOpen = (open: boolean) => {
-    editor.hidden = !open;
-    editorToggle.setAttribute('aria-expanded', String(open));
-    editorToggle.setAttribute('aria-label', open
-      ? options.localize('收起命令编辑器', 'Collapse command editor')
-      : options.localize('展开命令编辑器', 'Expand command editor'));
-    if (!open) {
-      sendOptions.hidden = true;
-      sendMenuButton.setAttribute('aria-expanded', 'false');
-    }
-    requestAnimationFrame(options.refitTerminal);
-  };
-
-  const sendCommand = (value: string) => {
-    const payload = commandPayload(value);
-    if (!connected || !payload) return;
-    resetModifiers();
-    options.send(payload);
-    options.focusTerminal();
-  };
-
-  const setSendMenuOpen = (open: boolean) => {
-    sendOptions.hidden = !open;
-    sendMenuButton.setAttribute('aria-expanded', String(open));
   };
 
   keyScroll.addEventListener('click', (event) => {
@@ -156,42 +102,6 @@ export function createTerminalTools(options: TerminalToolsOptions): TerminalTool
     options.focusTerminal();
   });
 
-  editorToggle.addEventListener('click', () => setEditorOpen(editor.hidden));
-  editorClose.addEventListener('click', () => {
-    setEditorOpen(false);
-    editorToggle.focus();
-  });
-  textarea.addEventListener('input', updateActions);
-  textarea.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      sendCommand(textarea.value);
-    }
-  });
-  clearButton.addEventListener('click', () => {
-    textarea.value = '';
-    updateActions();
-    textarea.focus();
-  });
-  insertButton.addEventListener('click', () => {
-    const insertion = textarea.value.replace(/\r\n?/g, '\n').split('\n').filter(Boolean).join('; ');
-    if (!connected || !insertion) return;
-    resetModifiers();
-    options.send(insertion);
-    options.focusTerminal();
-  });
-  sendButton.addEventListener('click', () => sendCommand(textarea.value));
-  sendMenuButton.addEventListener('click', () => setSendMenuOpen(sendOptions.hidden));
-  sendOptions.addEventListener('click', (event) => {
-    const item = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-command-send]');
-    if (!item) return;
-    setSendMenuOpen(false);
-    sendCommand(item.dataset.commandSend === 'line' ? currentLine(textarea) : textarea.value);
-  });
-  document.addEventListener('click', (event) => {
-    if (!sendOptions.hidden && !(event.target as HTMLElement).closest('.command-send-group')) setSendMenuOpen(false);
-  });
-
   updateActions();
   refreshModifierButtons();
 
@@ -203,7 +113,7 @@ export function createTerminalTools(options: TerminalToolsOptions): TerminalTool
       updateActions();
     },
     refreshLanguage() {
-      setEditorOpen(!editor.hidden);
+      // 命令编辑器已移除，语言切换无需再处理编辑器显隐。
     },
   };
 }

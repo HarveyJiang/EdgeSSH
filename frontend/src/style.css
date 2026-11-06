@@ -1578,13 +1578,7 @@ button:disabled {
   overscroll-behavior-x: contain;
 }
 
-.terminal-key,
-.command-editor-toggle,
-.command-editor-action,
-.command-editor-send,
-.command-editor-send-menu,
-.command-editor-close,
-.command-send-options button {
+.terminal-key {
   border: 1px solid var(--term-control-border);
   border-radius: 6px;
   background: var(--term-control);
@@ -1628,179 +1622,9 @@ button:disabled {
   opacity: 0.38;
 }
 
-.command-editor-toggle {
-  display: inline-flex;
-  min-width: 82px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 5px 8px 5px 0;
-  padding: 0 9px;
-  color: var(--term-accent-text);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
 
-.command-editor-toggle svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
 
-.command-editor-toggle:hover,
-.command-editor-toggle[aria-expanded='true'] {
-  border-color: var(--term-accent);
-  background: var(--term-accent-soft);
-}
 
-.command-editor {
-  display: grid;
-  height: 176px;
-  min-height: 0;
-  grid-template-rows: 34px minmax(0, 1fr) 42px;
-  background: var(--term-chrome);
-}
-
-.command-editor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px 0 12px;
-  border-bottom: 1px solid var(--term-border);
-  color: var(--term-muted);
-  font-size: 11px;
-}
-
-.command-editor-close {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  border-color: transparent;
-  background: transparent;
-  color: var(--term-muted);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.command-editor-close:hover {
-  border-color: var(--term-control-border);
-  background: var(--term-hover);
-  color: var(--term-control-text);
-}
-
-#command-editor-input {
-  width: 100%;
-  min-height: 0;
-  resize: none;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  padding: 10px 12px;
-  background: var(--term-input);
-  color: var(--term-control-text);
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.55;
-  letter-spacing: 0;
-  tab-size: 2;
-}
-
-#command-editor-input::placeholder {
-  color: var(--muted-2);
-}
-
-#command-editor-input:focus {
-  box-shadow: inset 0 0 0 1px var(--term-focus);
-}
-
-.command-editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  border-top: 1px solid var(--term-border);
-}
-
-.command-editor-action,
-.command-editor-send,
-.command-editor-send-menu {
-  height: 30px;
-  padding: 0 11px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.command-editor-action:hover:not(:disabled) {
-  border-color: var(--term-control-border-hover);
-  background: var(--term-hover);
-}
-
-.command-send-group {
-  position: relative;
-  display: flex;
-  margin-left: auto;
-}
-
-.command-editor-send {
-  border-radius: 6px 0 0 6px;
-  border-color: var(--term-send-border);
-  background: var(--term-send-bg);
-  color: var(--term-send-text);
-}
-
-.command-editor-send-menu {
-  width: 30px;
-  padding: 0;
-  border-left: 0;
-  border-radius: 0 6px 6px 0;
-  border-color: var(--term-send-border);
-  background: var(--term-send-bg);
-  color: var(--term-send-text);
-}
-
-.command-editor-send:hover:not(:disabled),
-.command-editor-send-menu:hover:not(:disabled) {
-  background: var(--term-send-hover);
-}
-
-.command-editor-action:disabled,
-.command-editor-send:disabled,
-.command-editor-send-menu:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-.command-send-options {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 6px);
-  z-index: 25;
-  display: grid;
-  min-width: 132px;
-  padding: 4px;
-  border: 1px solid var(--term-control-border);
-  border-radius: 7px;
-  background: var(--term-menu);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
-}
-
-.command-send-options button {
-  height: 32px;
-  border-color: transparent;
-  text-align: left;
-  font-size: 11px;
-}
-
-.command-send-options button:hover {
-  background: var(--term-hover);
-  color: var(--term-accent-text);
-}
 
 @media (max-width: 760px) {
   .terminal-key-scroll {
@@ -1810,21 +1634,6 @@ button:disabled {
   .terminal-key {
     min-width: 42px;
     height: 34px;
-  }
-
-  .command-editor-toggle {
-    min-width: 42px;
-    margin-right: 5px;
-    padding: 0 8px;
-  }
-
-  .command-editor-toggle span {
-    display: none;
-  }
-
-  .command-editor {
-    height: 154px;
-    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
