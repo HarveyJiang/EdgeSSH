@@ -16,10 +16,11 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   `;
   document.body.appendChild(popover);
 
-  // 贴在 "+" 按钮下方弹出
+  // 贴在 "+" 按钮下方弹出：先设定位置再挂载，避免闪现到左上角
   const rect = anchor.getBoundingClientRect();
   popover.style.left = `${rect.left}px`;
   popover.style.top = `${rect.bottom + 6}px`;
+  popover.style.transform = 'none';
 
   const search = popover.querySelector('.host-picker-search') as HTMLInputElement;
   const list = popover.querySelector('.host-picker-list')!;

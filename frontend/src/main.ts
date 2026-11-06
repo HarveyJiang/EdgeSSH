@@ -13,6 +13,8 @@ import { Keychain, fillKeychainSelect } from './keychain';
 import { resolveConnectionControl, resolveConnectionPanel } from './ui-state';
 import { classifyHostKey, SSH_FINGERPRINT_RE, type HostKeyPrompt } from './host-key';
 import { FileManager, collectFileManagerElements } from './file-manager';
+
+declare const __APP_VERSION__: string;
 import { FileTree } from './file-tree';
 import { countryFlag } from './flags';
 import { ProcessManager, collectProcessManagerElements, type NetworkSample } from './process-manager';
@@ -959,9 +961,8 @@ function setAuthMethod(method: AuthMethod | 'keychain'): void {
   const radio = ui.form.querySelector<HTMLInputElement>(`input[name="authMethod"][value="${method}"]`);
   if (radio) radio.checked = true;
   ui.passwordField.hidden = method !== 'password';
-  ui.keyField.hidden = method !== 'publickey';
+  ui.keyField.hidden = true; // 隐藏私钥明文输入，不需要查看私钥
   ui.keychainField.hidden = method !== 'keychain';
-  // 「上传私钥」与「密钥链」两种公钥方式都要能填口令
   ui.keyPassphraseField.hidden = method !== 'publickey' && method !== 'keychain';
   ui.keychainId.required = method === 'keychain';
 }
@@ -1276,7 +1277,7 @@ function renderProfiles(): void {
     // 双击左侧面板的主机卡片（非删除按钮）直接连接，在新页签打开终端。
     card.addEventListener('dblclick', (dblEvent) => {
       const target = dblEvent.target as HTMLElement | null;
-      if (target?.closest('button')) return;
+      if (target?.closest('[data-delete-profile]')) return;
       void applyProfile(profile).then(() => void connect());
     });
     ui.profileList.append(card);
@@ -2969,6 +2970,8 @@ if (storedTheme === 'light' || storedTheme === 'dark') document.documentElement.
 applyTerminalTheme();
 async function initialize(): Promise<void> {
   applyLanguage(currentLanguage);
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = `v${__APP_VERSION__}`;
   renderProfiles();
   setPanelOpen(panelOpen);
   setAuthMethod('password');
