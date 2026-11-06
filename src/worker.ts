@@ -43,7 +43,7 @@ async function sessionTicket(request: Request, env: Env, accountId: string): Pro
   return secureResponse(Response.json({ ...ticket, sessionId: id.toString() }, { headers: { 'Cache-Control': 'no-store' } }));
 }
 
-<</**
+/**
  * Swap the ticket of a session this account already owns. This is how a reloaded
  * tab gets back to the shell it left behind: same Durable Object, same SSH
  * connection, fresh credential. Only the owner can ask, and nothing else about

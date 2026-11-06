@@ -3470,6 +3470,406 @@ button:disabled {
   }
 }
 
+/* ── 移动端适配（参考 Termius：底部优先、软键盘友好、触摸优先）─────────────── */
+@media (max-width: 768px) {
+  :root {
+    --topbar-height: calc(52px + env(safe-area-inset-top));
+  }
+
+  body {
+    /* 16px 字段阻止 iOS 聚焦输入框时页面被强制放大。 */
+    font-size: 16px;
+  }
+
+  /* 顶栏：更矮、按钮更小，给终端让出更多垂直空间。 */
+  .topbar {
+    height: var(--topbar-height);
+    padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+    gap: 8px;
+  }
+
+  .icon-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .icon-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .brand {
+    font-size: 14px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+  }
+
+  .live-orb {
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+  }
+
+  /* 工作区：更紧凑的内边距。 */
+  .workspace {
+    padding: 8px;
+  }
+
+  /* 连接面板：手机上占满宽度，从左侧滑入覆盖。 */
+  .connection-panel {
+    width: 100vw;
+    left: 0;
+    padding: 16px 12px max(24px, env(safe-area-inset-bottom));
+    transform: translateX(-102%);
+  }
+
+  .connection-panel.open {
+    transform: translateX(0);
+  }
+
+  /* 表单：输入框变大，方便手指点击；iOS 下 16px 避免缩放。 */
+  .field input,
+  .field select {
+    height: 46px;
+    font-size: 16px;
+    padding: 0 12px;
+  }
+
+  .field textarea {
+    font-size: 16px;
+    min-height: 100px;
+  }
+
+  .field small {
+    font-size: 12px;
+  }
+
+  .segmented-control span {
+    min-height: 42px;
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .input-action {
+    width: 40px;
+    font-size: 10px;
+  }
+
+  .primary-button,
+  .secondary-button {
+    height: 46px;
+    font-size: 14px;
+  }
+
+  /* 终端区：占满可用空间，减少周边 chrome。 */
+  .terminal-pane {
+    padding: 4px;
+  }
+
+  .terminal-toolbar {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .toolbar-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+  }
+
+  .toolbar-button .button-label {
+    display: none;
+  }
+
+  .toolbar-button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 会话目标：国旗让位，只保留名称 + 地址两行。 */
+  .session-flag {
+    display: none;
+  }
+
+  .session-target {
+    gap: 6px;
+  }
+
+  .session-target strong {
+    font-size: 14px;
+  }
+
+  .session-target span {
+    font-size: 11px;
+  }
+
+  /* 资源指标：窄屏只留百分比数字，隐藏详情行与时长行。 */
+  .resource-detail {
+    display: none;
+  }
+
+  .session-metrics {
+    display: none;
+  }
+
+  .resource-metric {
+    min-width: 0;
+    flex: 1 1 0;
+    font-size: 11px;
+  }
+
+  .resource-metric-line {
+    gap: 4px;
+  }
+
+  .resource-metric-line > span {
+    font-size: 9px;
+  }
+
+  .resource-metric-line > strong {
+    font-size: 12px;
+  }
+
+  /* 终端快捷键栏：按钮更大、间距更宽，方便触摸。 */
+  .terminal-keybar {
+    gap: 5px;
+    padding: 8px 6px;
+    overflow-x: auto;
+  }
+
+  .terminal-key {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+    flex: 0 0 auto;
+  }
+
+  .terminal-key-fn,
+  .terminal-key-arrow {
+    width: 40px;
+    height: 40px;
+  }
+
+  .terminal-key-modifier,
+  .terminal-key-control {
+    width: 46px;
+    height: 40px;
+  }
+
+  /* 停靠面板标签：只保留图标，文字隐藏。 */
+  .dock-tab {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    min-width: 44px;
+  }
+
+  .dock-tab .button-label {
+    display: none;
+  }
+
+  .dock-tab-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* 会话标签：水平滚动，避免换行撑破。 */
+  .session-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    gap: 6px;
+  }
+
+  .session-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 文件管理器：树侧边栏默认折叠为窄条，表格隐藏非关键列。 */
+  .file-manager {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .file-tree {
+    width: 44px;
+  }
+
+  .file-tree-scroller,
+  .file-tree-resize,
+  .file-tree-title {
+    display: none;
+  }
+
+  .file-tree-header {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .file-tree-row {
+    padding-left: 8px;
+  }
+
+  .file-table td:nth-child(5),
+  .file-table td:nth-child(6),
+  .file-table td:nth-child(7) {
+    display: none;
+  }
+
+  .file-table th:nth-child(5),
+  .file-table th:nth-child(6),
+  .file-table th:nth-child(7) {
+    display: none;
+  }
+
+  .file-table th:first-child { width: 44%; }
+  .file-table th:nth-child(2) { width: 18%; }
+  .file-table th:nth-child(3) { width: 18%; }
+  .file-table th:nth-child(4) { width: 20%; }
+
+  .file-action {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .file-view-controls .file-action {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* 进程表格：隐藏宽列。 */
+  .process-table th:nth-child(4),
+  .process-table td:nth-child(4),
+  .process-table th:nth-child(6),
+  .process-table td:nth-child(6),
+  .process-table th:nth-child(7),
+  .process-table td:nth-child(7) {
+    display: none;
+  }
+
+  .process-table th:first-child { width: 10%; }
+  .process-table th:nth-child(2) { width: 12%; }
+  .process-table th:nth-child(3) { width: 14%; }
+  .process-table th:nth-child(5) { width: 10%; }
+  .process-table th:nth-child(8) { width: 30%; }
+  .process-table th:nth-child(9) { width: 14%; }
+
+  /* 模态框与对话框：全宽或接近全宽，内边距收紧。 */
+  dialog,
+  .host-key-dialog,
+  .process-kill-dialog {
+    width: min(94vw, 520px);
+    max-height: min(90vh, 640px);
+    margin: 0;
+  }
+
+  .host-key-dialog,
+  .process-kill-dialog {
+    padding: 20px;
+  }
+
+  .host-key-dialog form,
+  .process-kill-dialog form {
+    grid-template-columns: 1fr;
+    gap: 12px 14px;
+    padding: 0;
+  }
+
+  .host-key-dialog dl div,
+  .process-kill-dialog dl div {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .dialog-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 10px;
+  }
+
+  .dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dialog-actions .primary-button,
+  .dialog-actions .secondary-button {
+    width: 100%;
+  }
+
+  /* 事件日志：更紧凑。 */
+  .event-log {
+    font-size: 11px;
+  }
+
+  .event-line {
+    gap: 6px;
+  }
+
+  /* 文件页（白橙主题）在窄屏也收紧。 */
+  .files-page {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .files-page .file-toolbar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .files-page .file-action {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  /* 避免固定定位的 toast 被软键盘顶跑。 */
+  .toast-region {
+    top: calc(var(--topbar-height) + 10px);
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  /* 长按粘贴浮层：挂在 body 上、fixed 定位，不受终端区 overflow: hidden 裁剪。 */
+  .terminal-paste-menu {
+    position: fixed;
+    z-index: 60;
+    pointer-events: auto;
+    width: 140px;
+    padding: 7px;
+    border: 1px solid var(--term-control-border);
+    border-radius: 8px;
+    background: var(--term-menu);
+    color: var(--term-control-text);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    display: none;
+    font-size: 13px;
+  }
+
+  .terminal-paste-menu[open] {
+    display: block;
+  }
+
+  .terminal-paste-button {
+    width: 100%;
+    height: 42px;
+    background: var(--term-control);
+    color: var(--term-control-text);
+    border: 1px solid var(--term-control-border);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .terminal-paste-button:active {
+    background: var(--term-control-border-hover);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

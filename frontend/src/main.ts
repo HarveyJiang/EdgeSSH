@@ -2752,6 +2752,97 @@ ui.resourceNetworkSelect.addEventListener('change', () => {
 // Keystrokes reach the terminal that owns the UI; each session bound its own
 // `onData` handler in `attachSessionRuntime()`.
 new ResizeObserver(() => fitTerminal(true)).observe(ui.terminalStage);
+
+// 软键盘弹出/收起会压缩视口：重新 fit 终端，让光标与可行数跟着可用高度。
+const viewport = window.visualViewport;
+if (viewport) {
+  let lastViewportHeight = viewport.height;
+  let viewportFrame = 0;
+  viewport.addEventListener('resize', () => {
+    cancelAnimationFrame(viewportFrame);
+    viewportFrame = requestAnimationFrame(() => {
+      const height = viewport.height;
+      const changed = Math.abs(height - lastViewportHeight);
+      lastViewportHeight = height;
+      if (changed > 40) fitTerminal(true);
+    });
+  });
+}
+
+// 长按终端区弹出粘贴浮层（移动端，参考 Termius 长按粘贴）。
+const pasteMenu = document.createElement('div');
+pasteMenu.className = 'terminal-paste-menu';
+pasteMenu.hidden = true;
+const pasteButton = document.createElement('button');
+pasteButton.type = 'button';
+pasteButton.className = 'terminal-paste-button';
+pasteButton.textContent = bilingual('粘贴', 'Paste');
+pasteButton.setAttribute('aria-label', bilingual('从剪贴板粘贴到终端', 'Paste from clipboard into terminal'));
+pasteMenu.appendChild(pasteButton);
+document.body.appendChild(pasteMenu);
+
+let pressTimer: number | null = null;
+let pressX = 0;
+let pressY = 0;
+
+function clearPressTimer(): void {
+  if (pressTimer !== null) {
+    window.clearTimeout(pressTimer);
+    pressTimer = null;
+  }
+}
+
+function hidePasteMenu(): void {
+  pasteMenu.hidden = true;
+}
+
+ui.terminalStage.addEventListener('pointerdown', (event) => {
+  const target = event.target as HTMLElement | null;
+  hidePasteMenu();
+  if (!target || target.closest('button, input, textarea, select, [contenteditable]')) return;
+  pressX = event.clientX;
+  pressY = event.clientY;
+  clearPressTimer();
+  pressTimer = window.setTimeout(() => {
+    pressTimer = null;
+    pasteMenu.hidden = true;
+    if (ctx.state === 'connected') {
+      let left = pressX - 64;
+      let top = pressY + 10;
+      if (left < 6) left = 6;
+      if (left + 140 > window.innerWidth) left = window.innerWidth - 140 - 6;
+      pasteMenu.style.left = `${Math.round(left)}px`;
+      pasteMenu.style.top = `${Math.round(top)}px`;
+      pasteMenu.hidden = false;
+      pasteButton.focus();
+    }
+  }, 600);
+}, { passive: true });
+
+ui.terminalStage.addEventListener('pointerup', clearPressTimer);
+ui.terminalStage.addEventListener('pointercancel', clearPressTimer);
+ui.terminalStage.addEventListener('pointermove', (event) => {
+  if (pressTimer === null) return;
+  if (Math.abs(event.clientX - pressX) > 12 || Math.abs(event.clientY - pressY) > 12) clearPressTimer();
+}, { passive: true });
+
+pasteButton.addEventListener('click', async (clickEvent) => {
+  clickEvent.stopPropagation();
+  hidePasteMenu();
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      // 终端里回车是 \r，剪贴板多为 \n，统一后再当键盘输入发给 SSH。
+      sendTerminalData(text.replace(/\r\n/g, '\r').replace(/\n/g, '\r'));
+      toast(bilingual('已粘贴到终端', 'Pasted into terminal'), 'info');
+    }
+  } catch {
+    toast(bilingual('无法读取剪贴板', 'Could not read clipboard'), 'error');
+  } finally {
+    ctx.terminal.focus();
+  }
+});
+
 window.addEventListener('beforeunload', () => {
   for (const session of sessions.all()) {
     session.fileManager.reset();
