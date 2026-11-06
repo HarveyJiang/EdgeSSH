@@ -2928,6 +2928,36 @@ ui.terminalStage.addEventListener('pointermove', (event) => {
   if (Math.abs(event.clientX - pressX) > 12 || Math.abs(event.clientY - pressY) > 12) clearPressTimer();
 }, { passive: true });
 
+/** 选中终端文本后自动复制到剪贴板（类似 Termius 的选中即复制）。 */
+let lastCopiedText = '';
+function setupAutoCopyOnSelect(): void {
+  const copySelection = (): void => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const text = sel.toString().trim();
+    if (!text || text === lastCopiedText) return;
+    // 只处理终端区域内的选择
+    try {
+      const range = sel.getRangeAt(0);
+      const container = range.commonAncestorContainer as Node;
+      if (!ui.terminalStage.contains(container)) return;
+    } catch {
+      return;
+    }
+    lastCopiedText = text;
+    // 2 秒后重置，允许重新复制相同内容
+    setTimeout(() => { lastCopiedText = ''; }, 2000);
+    void navigator.clipboard.writeText(text).then(() => {
+      toast(bilingual('已复制', 'Copied'), 'info');
+    }).catch(() => {
+      // 剪贴板不可用时静默失败
+    });
+  };
+  document.addEventListener('selectionchange', copySelection);
+  ui.terminalStage.addEventListener('mouseup', copySelection);
+  ui.terminalStage.addEventListener('keyup', copySelection);
+}
+
 pasteButton.addEventListener('click', async (clickEvent) => {
   clickEvent.stopPropagation();
   hidePasteMenu();
@@ -3051,6 +3081,7 @@ async function initialize(): Promise<void> {
   // Anything that was connected before this page loaded is still waiting on the
   // server; go and claim it back before the user notices anything was missing.
   await restorePersistedSessions();
+  setupAutoCopyOnSelect();
 }
 
 void initialize().catch((error) => {
