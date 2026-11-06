@@ -1,5 +1,9 @@
 import { api, type CloudHost } from './cloud-api';
 
+/** 主机列表内存缓存（5 分钟有效），避免每次点 "+" 都重新请求 /api/hosts。 */
+let hostCache: { hosts: CloudHost[]; ts: number } | null = null;
+const HOST_CACHE_TTL = 5 * 60 * 1000;
+
 /** 轻量非模态主机选择浮层：点 "+" 弹出，列出 host:port + 备注，选中后回调。不遮挡页面，不阻塞交互。 */
 export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) => void): void {
   // 移除已存在的浮层，避免多次点击堆叠
@@ -12,14 +16,15 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   popover.setAttribute('aria-label', '主机列表');
   popover.innerHTML = `<div class="host-picker-list"></div>`;
 
-  // 贴在 "+" 按钮正下方弹出：先设 left/top 再挂载，避免闪现到左上角
+  // 贴在 "+" 按钮正下方弹出：先在 DOM 中挂载，再按 getBoundingClientRect 设定 left/top，
+  // 避免 fixed 定位元素在未挂载时默认落在 (0,0)。
+  document.body.appendChild(popover);
+
   const rect = anchor.getBoundingClientRect();
   popover.style.position = 'fixed';
-  popover.style.left = `${rect.left}px`;
-  popover.style.top = `${rect.bottom + 6}px`;
+  popover.style.left = `${Math.round(rect.left)}px`;
+  popover.style.top = `${Math.round(rect.bottom + 6)}px`;
   popover.style.transform = 'none';
-
-  document.body.appendChild(popover);
 
   const list = popover.querySelector('.host-picker-list')!;
 
@@ -53,16 +58,23 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
     }
   }
 
-  api<{ hosts: CloudHost[] }>('/api/hosts').then(({ hosts: h }) => {
-    hosts = h;
-    render(h);
-  }).catch(() => {
-    list.replaceChildren();
-    const err = document.createElement('div');
-    err.className = 'host-picker-empty';
-    err.textContent = '加载服务器列表失败，请先登录';
-    list.append(err);
-  });
+  const now = Date.now();
+  if (hostCache && now - hostCache.ts < HOST_CACHE_TTL) {
+    hosts = hostCache.hosts;
+    render(hosts);
+  } else {
+    api<{ hosts: CloudHost[] }>('/api/hosts').then(({ hosts: h }) => {
+      hosts = h;
+      hostCache = { hosts: h, ts: now };
+      render(h);
+    }).catch(() => {
+      list.replaceChildren();
+      const err = document.createElement('div');
+      err.className = 'host-picker-empty';
+      err.textContent = '加载服务器列表失败，请先登录';
+      list.append(err);
+    });
+  }
 
   // 点击浮层内部不冒泡，避免触发文档的关闭逻辑
   popover.addEventListener('click', (event) => event.stopPropagation());
