@@ -15,6 +15,7 @@ import { classifyHostKey, SSH_FINGERPRINT_RE, type HostKeyPrompt } from './host-
 import { FileManager, collectFileManagerElements } from './file-manager';
 
 declare const __APP_VERSION__: string;
+declare const __APP_BUILD_TIME__: string;
 import { FileTree } from './file-tree';
 import { countryFlag } from './flags';
 import { ProcessManager, collectProcessManagerElements, type NetworkSample } from './process-manager';
@@ -2973,7 +2974,7 @@ applyTerminalTheme();
 async function initialize(): Promise<void> {
   applyLanguage(currentLanguage);
   const versionEl = document.getElementById('app-version');
-  if (versionEl) versionEl.textContent = `v${__APP_VERSION__}`;
+  if (versionEl) versionEl.textContent = `v${__APP_VERSION__} · build ${__APP_BUILD_TIME__}`;
   renderProfiles();
   setPanelOpen(panelOpen);
   setAuthMethod('password');

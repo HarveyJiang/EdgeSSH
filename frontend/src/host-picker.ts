@@ -16,15 +16,15 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   popover.setAttribute('aria-label', '主机列表');
   popover.innerHTML = `<div class="host-picker-list"></div>`;
 
-  // 贴在 "+" 按钮正下方弹出：先在 DOM 中挂载，再按 getBoundingClientRect 设定 left/top，
-  // 避免 fixed 定位元素在未挂载时默认落在 (0,0)。
-  document.body.appendChild(popover);
-
+  // 贴在 "+" 按钮正下方弹出：先在 JS 里算好位置并设完所有 inline style，
+  // 再挂载到 body，让浏览器一次性固定定位到正确坐标，避免先落在 (0,0)。
   const rect = anchor.getBoundingClientRect();
   popover.style.position = 'fixed';
   popover.style.left = `${Math.round(rect.left)}px`;
   popover.style.top = `${Math.round(rect.bottom + 6)}px`;
   popover.style.transform = 'none';
+
+  document.body.appendChild(popover);
 
   const list = popover.querySelector('.host-picker-list')!;
 
