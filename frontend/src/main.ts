@@ -755,7 +755,13 @@ function attachSessionRuntime(session: SessionContext): void {
   session.fitAddon = new FitAddon();
   session.terminal.loadAddon(session.fitAddon);
   session.terminal.loadAddon(new WebLinksAddon());
-  session.terminal.onData((data) => terminalTools?.handleTerminalData(data));
+  // 每个会话的终端输入只发给该会话自己的 socket，绝不串线到当前前台会话。
+  // 修饰键（Ctrl/Alt）只在全局命令按键栏里使用，xterm 到的 data 已是最终字符。
+  session.terminal.onData((data) => {
+    if (session.socket?.readyState === WebSocket.OPEN && session.state === 'connected') {
+      session.socket.send(JSON.stringify({ type: 'input', data }));
+    }
+  });
   // Open against the session's own host instead of a page-wide `#terminal` node,
   // so a second session can get a sibling host inside the same stage.
   mountTerminal(session);
@@ -1852,8 +1858,27 @@ function createSshReconnectFactory(session: SessionContext): (attempt: number) =
   return async (attempt: number): Promise<WebSocket> => {
     const params = session.reconnectParams!;
     const abortController = new AbortController();
-    const { ticket, sessionId } = await issueTicket(abortController.signal);
-    session.backendSessionId = sessionId;
+
+    // 优先复用后端已保留的同一会话（resume），避免签发新票据、建新 SSH 连接，
+    // 从而让旧会话在后端白白保留并消耗额外 Durable Object 时长。
+    // 保留已过期时才降级为全新 ticket + connect。
+    let ticket = '';
+    let sessionId = '';
+    let isResume = false;
+    if (session.backendSessionId) {
+      const restored = await claimRestoredSession(session.backendSessionId);
+      if (restored) {
+        ticket = restored;
+        sessionId = session.backendSessionId;
+        isResume = true;
+      }
+    }
+    if (!isResume) {
+      const issued = await issueTicket(abortController.signal);
+      ticket = issued.ticket!;
+      sessionId = issued.sessionId!;
+      session.backendSessionId = sessionId;
+    }
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = new URL('/api/ssh', location.href);
@@ -1874,26 +1899,33 @@ function createSshReconnectFactory(session: SessionContext): (attempt: number) =
       resetTerminalForConnection(session.terminal);
       if (isFront(session)) fitTerminal(true);
 
-      const config: ConnectionConfig = {
-        type: 'connect',
-        host: params.host,
-        port: params.port,
-        username: params.username,
-        authMethod: params.authMethod as AuthMethod,
-        cols: session.terminal.cols,
-        rows: session.terminal.rows,
-        term: params.term,
-      };
-      if (params.authMethod === 'password') config.password = params.password;
-      else if (params.keychainId) config.keychainId = params.keychainId;
-      else config.privateKey = params.privateKey;
-      // 重连时口令必须一并回传，否则加密私钥会在第二次握手上解不开。
-      if (params.authMethod === 'publickey' && params.keyPassphrase) config.keyPassphrase = params.keyPassphrase;
-      if (params.pinnedKey) config.expectedFingerprint = params.pinnedKey;
+      if (isResume) {
+        // 接管后端保留的同一 shell：不重新握手，不重新认证。
+        ws.send(JSON.stringify({ type: 'resume', cols: session.terminal.cols, rows: session.terminal.rows }));
+        report(localized('正在恢复上次的会话…', 'Restoring your session…'));
+        say(bilingual('WebSocket 已建立，正在恢复原有会话（自动重连）。', 'WebSocket established; resuming previous session (auto-reconnect).'), 'transport');
+      } else {
+        const config: ConnectionConfig = {
+          type: 'connect',
+          host: params.host,
+          port: params.port,
+          username: params.username,
+          authMethod: params.authMethod as AuthMethod,
+          cols: session.terminal.cols,
+          rows: session.terminal.rows,
+          term: params.term,
+        };
+        if (params.authMethod === 'password') config.password = params.password;
+        else if (params.keychainId) config.keychainId = params.keychainId;
+        else config.privateKey = params.privateKey;
+        // 重连时口令必须一并回传，否则加密私钥会在第二次握手上解不开。
+        if (params.authMethod === 'publickey' && params.keyPassphrase) config.keyPassphrase = params.keyPassphrase;
+        if (params.pinnedKey) config.expectedFingerprint = params.pinnedKey;
 
-      ws.send(JSON.stringify(config));
-      report(localized('正在打开 TCP 连接...', 'Opening TCP connection...'));
-      say(bilingual('WebSocket 已建立，正在打开 SSH 传输（自动重连）。', 'WebSocket established; opening SSH transport (auto-reconnect).'), 'transport');
+        ws.send(JSON.stringify(config));
+        report(localized('正在打开 TCP 连接...', 'Opening TCP connection...'));
+        say(bilingual('WebSocket 已建立，正在打开 SSH 传输（自动重连）。', 'WebSocket established; opening SSH transport (auto-reconnect).'), 'transport');
+      }
     }, { once: true });
 
     ws.addEventListener('message', (socketEvent) => {

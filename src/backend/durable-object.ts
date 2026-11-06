@@ -543,6 +543,9 @@ export class SSHSessionDO implements DurableObject {
     clearTimeout(retained.timeout);
     this.retainedSessions.delete(previous);
     this.sessions.delete(previous);
+    // 新主 socket 已接管：连接握手超时定时器必须立即清除，否则 10 秒后
+    // 仍会 reject 掉刚恢复的会话。
+    this.clearDeadline(ws);
     // Nothing bound to the socket that left survives it: its SFTP and process
     // sockets went away with that tab.
     const previousToken = this.sftpTokenByMainWebSocket.get(previous);

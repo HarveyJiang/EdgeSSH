@@ -205,6 +205,9 @@ export class HostGlobe {
     this.focused = view !== null;
     this.focusStart = from;
     this.focusEase = to;
+    // 每次发起新聚焦都从 t=0 开始；否则上一次尚未完成的动画会让本次
+    // 从中间进度插值，连续切换不同大洲时聚焦目标会漂移。
+    this.focusT = 0;
     this.focusFrom = this.focusT;
     this.focusAt = performance.now();
     if (!animate) { this.focusT = view ? 1 : 0; this.applyFocus(); return; }

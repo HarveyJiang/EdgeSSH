@@ -36,7 +36,9 @@ export const MAX_SESSION_RETENTION_MS = 30 * 60_000;
 
 export function sessionRetentionMs(configured?: string): number {
   const value = Number(configured);
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_SESSION_RETENTION_MS;
+  if (!Number.isFinite(value)) return DEFAULT_SESSION_RETENTION_MS;
+  // 0 显式禁用会话保留：页面关闭即立即释放 SSH uplink，不再占用 Durable Object 时长。
+  if (value <= 0) return 0;
   return Math.min(MAX_SESSION_RETENTION_MS, Math.floor(value));
 }
 
