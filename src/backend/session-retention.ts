@@ -29,8 +29,13 @@ const TERMINAL_CLIENT_CODES = [4000, 4001, 4002];
  * Default holding window. The session stays billed for every second of it, so
  * it is long enough to cover a reload or a tunnel blip and short enough that a
  * forgotten tab is not expensive.
+ *
+ * Disabled by default (0): closing the page releases the SSH uplink immediately
+ * instead of holding a Durable Object for minutes, so a user who simply closes
+ * a tab never consumes DO time without realising it. Operators who want
+ * reload/resume resilience can opt in with SESSION_RETENTION_MS.
  */
-export const DEFAULT_SESSION_RETENTION_MS = 5 * 60_000;
+export const DEFAULT_SESSION_RETENTION_MS = 0;
 /** Upper bound regardless of configuration, to keep a typo from billing forever. */
 export const MAX_SESSION_RETENTION_MS = 30 * 60_000;
 
