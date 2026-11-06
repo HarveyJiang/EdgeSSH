@@ -1,8 +1,8 @@
 import { api, type CloudHost } from './cloud-api';
 
-/** 主机列表内存缓存（5 分钟有效），避免每次点 "+" 都重新请求 /api/hosts。 */
+/** 主机列表内存缓存（24 小时有效），避免每次点 "+" 都重新请求 /api/hosts。 */
 let hostCache: { hosts: CloudHost[]; ts: number } | null = null;
-const HOST_CACHE_TTL = 5 * 60 * 1000;
+const HOST_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /** 轻量非模态主机选择浮层：点 "+" 弹出，列出 host:port + 备注，选中后回调。不遮挡页面，不阻塞交互。 */
 export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) => void): void {

@@ -1557,7 +1557,9 @@ button:disabled {
 .host-picker-popover {
   position: fixed;
   z-index: 1000;
-  width: 340px;
+  width: fit-content;
+  min-width: 180px;
+  max-width: 460px;
   background: var(--term-chrome);
   border: 1px solid var(--term-border);
   border-radius: 10px;
