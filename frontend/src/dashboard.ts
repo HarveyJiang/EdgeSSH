@@ -805,7 +805,14 @@ export class Dashboard {
           try { await removeHost(host.id); await this.refresh(); }
           catch (error) { this.notice(error instanceof Error ? error.message : '删除失败。'); remove.disabled = false; }
         });
-        row.append(symbol, copy, location, rowActions, edit, remove); list.append(row);
+        row.append(symbol, copy, location, rowActions, edit, remove);
+        // 双击卡片主体（非按钮区域）直接连接，避免再点下方「连接」按钮。
+        row.addEventListener('dblclick', (dblEvent) => {
+          const target = dblEvent.target as HTMLElement | null;
+          if (target?.closest('button')) return;
+          void this.connectHost(host);
+        });
+        list.append(row);
       }
     }
     // 徽标是从这里渲染的，所以重画后的快照就已经是最新的了。
