@@ -5,8 +5,8 @@ let hostCache: { hosts: CloudHost[]; ts: number } | null = null;
 const HOST_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /** 轻量非模态主机选择浮层：点 "+" 弹出，列出 host:port + 备注，选中后回调。
- * 优先贴在 "+" 按钮右下方；若按钮坐标异常（0,0），则 fallback 到页面右上方，绝不跑偏到左上角。 */
-export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) => void): void {
+ * 固定在页面右上方，不跟随按钮坐标，避免定位跑偏到 (0,0)。 */
+export function openHostPicker(onSelect: (host: CloudHost) => void): void {
   // 移除已存在的浮层，避免多次点击堆叠
   const existing = document.querySelector('.host-picker-popover');
   if (existing) existing.remove();
@@ -17,7 +17,13 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   popover.setAttribute('aria-label', '主机列表');
   popover.innerHTML = `<div class="host-picker-list"></div>`;
 
-  // 先挂载到 DOM，再获取按钮位置；fixed 定位元素必须在文档中才能可靠计算。
+  // 固定位置：页面右上方，距离顶部和右边各有一定间距，不依赖 getBoundingClientRect，
+  // 彻底避免因按钮坐标异常导致浮层跑到 (0,0)。
+  popover.style.position = 'fixed';
+  popover.style.right = '24px';
+  popover.style.top = '96px'; // 顶栏高度下方，避免被顶栏遮挡
+  popover.style.transform = 'none';
+
   document.body.appendChild(popover);
 
   const list = popover.querySelector('.host-picker-list')!;
@@ -69,14 +75,6 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
       list.append(err);
     });
   }
-
-  // 先按固定右上方兜底，避免闪现到 (0,0)。
-  // 直接基于 + 按钮的实时位置进行 fixed 定位，紧贴在按钮右下方
-  const rect = anchor.getBoundingClientRect();
-  popover.style.position = 'fixed';
-  popover.style.left = `${Math.round(rect.left)}px`;
-  popover.style.top = `${Math.round(rect.bottom + 6)}px`;
-  popover.style.transform = 'none';
 
   // 点击浮层内部不冒泡，避免触发文档的关闭逻辑
   popover.addEventListener('click', (event) => event.stopPropagation());

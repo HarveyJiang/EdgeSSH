@@ -3743,11 +3743,22 @@ button:disabled {
     height: 44px;
   }
 
-  /* 避免固定定位的 toast 被软键盘顶跑。 */
+  /* 避免固定定位的 toast 被软键盘顶跑。只贴在顶部。 */
   .toast-region {
     top: calc(var(--topbar-height) + 10px);
-    right: max(12px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
+    right: 12px;
+    left: 12px;
+    bottom: auto; /* 移除底部限制，防止撑满全屏 */
+    width: auto;
+    max-width: none;
+    justify-items: center; /* 居中显示 */
+  }
+
+  .toast {
+    width: fit-content;
+    max-width: 100%;
+    word-break: break-all;
+    box-sizing: border-box;
   }
 
   /* 长按粘贴浮层：挂在 body 上、fixed 定位，不受终端区 overflow: hidden 裁剪。 */

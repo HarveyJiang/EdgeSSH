@@ -355,7 +355,9 @@ const sessionTabBar = createSessionTabBar({
   onNew: (anchor) => {
     const session = claimPlaceholderSession();
     setFrontSession(session);
-    openHostPicker(anchor, (host) => {
+    // 每次都重新加载主机列表，确保数据最新。
+    // 浮层位置不再依赖 anchor，固定在右上方。
+    openHostPicker((host) => {
       // 选主机后直接尝试连接：有保存凭据即直接拨号并打开新页签终端；
       // 没有凭据时 connect() 会报缺少凭据并显示表单错误，绝不打开左侧面板。
       void applyProfile(host).then(() => void connect());
@@ -1435,6 +1437,25 @@ function fitTerminal(send = true): void {
   cancelAnimationFrame(ctx.resizeFrame);
   ctx.resizeFrame = requestAnimationFrame(() => {
     try {
+      // 适配 visualViewport，当软键盘弹出时，调整终端高度
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const viewportTop = window.visualViewport.offsetTop;
+        // 确保终端区域的高度适配视口，避免被软键盘遮挡
+        // 简单的处理：直接根据视口高度设置终端容器的 padding-bottom 或 height
+        // 这里的具体计算可能需要根据实际 UI 布局微调
+        // 假设 ui.terminalStage 需要调整其高度或 padding
+        const terminalContainer = document.querySelector<HTMLElement>('.term-instance');
+        if (terminalContainer) {
+          const keyboardInset = window.innerHeight - viewportHeight;
+          if (keyboardInset > 0) {
+            terminalContainer.style.paddingBottom = `${keyboardInset}px`;
+          } else {
+            terminalContainer.style.paddingBottom = '0px';
+          }
+        }
+      }
+
       ctx.fitAddon.fit();
       // 握手完成前不能发 resize：此时服务端还没有会话，任何非 connect 消息都会被判成重复
       // 连接，进而把正在进行的握手一起掐断。进入终端必然会触发 ResizeObserver（布局变化），
@@ -3087,3 +3108,12 @@ async function initialize(): Promise<void> {
 void initialize().catch((error) => {
   toast(error instanceof Error ? error.message : '初始化失败，请刷新页面重试。', 'error');
 });
+
+// 监听 visualViewport 变化，适配软键盘弹出
+if (window.visualViewport) {
+  const handleVisualViewportChange = () => {
+    requestAnimationFrame(() => fitTerminal(true));
+  };
+  window.visualViewport.addEventListener('resize', handleVisualViewportChange);
+  window.visualViewport.addEventListener('scroll', handleVisualViewportChange);
+}
