@@ -71,23 +71,12 @@ export function openHostPicker(anchor: HTMLElement, onSelect: (host: CloudHost) 
   }
 
   // 先按固定右上方兜底，避免闪现到 (0,0)。
-  // 初始化样式，避免闪烁。默认固定在右上方，等待 requestAnimationFrame 更新精确位置。
+  // 直接基于 + 按钮的实时位置进行 fixed 定位，紧贴在按钮右下方
+  const rect = anchor.getBoundingClientRect();
   popover.style.position = 'fixed';
-  popover.style.right = '24px';
-  popover.style.top = '96px';
+  popover.style.left = `${Math.round(rect.left)}px`;
+  popover.style.top = `${Math.round(rect.bottom + 6)}px`;
   popover.style.transform = 'none';
-
-  // requestAnimationFrame 确保浏览器已完成布局，再读取按钮坐标并跟随。
-  // 再次读取 anchor 的位置，以防第一次读取不准确或元素位置发生变化。
-  requestAnimationFrame(() => {
-    const rect = anchor.getBoundingClientRect();
-    // 仅在获取到有效坐标时才调整位置，否则保持右上方兜底。
-    if (rect.left > 0 || rect.top > 0) {
-      popover.style.left = `${Math.round(rect.left)}px`;
-      popover.style.top = `${Math.round(rect.bottom + 6)}px`;
-      popover.style.right = ''; // 清除 right 属性，让 left 生效
-    }
-  });
 
   // 点击浮层内部不冒泡，避免触发文档的关闭逻辑
   popover.addEventListener('click', (event) => event.stopPropagation());
