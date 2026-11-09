@@ -306,6 +306,22 @@
                     </div>
                     <progress id="resource-swap-progress" max="100" value="0" aria-label="Swap 使用率" data-i18n-aria-label-zh="Swap 使用率" data-i18n-aria-label-en="Swap usage"></progress>
                   </div>
+                  <!-- 新增：Top 5 进程快捷展示区 -->
+                  <div class="resource-metric resource-top-processes" style="min-width: 220px; font-size: 11px;">
+                    <div class="resource-metric-line" style="margin-bottom: 2px;">
+                      <span style="font-weight: 600; color: var(--text-muted);">Top 5 CPU / MEM</span>
+                    </div>
+                    <div id="top-processes-content" style="display: flex; gap: 12px; color: var(--text-secondary);">
+                      <div style="flex: 1; overflow: hidden;">
+                        <div style="font-weight: 500; color: var(--text);">CPU</div>
+                        <div id="top-cpu-list" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">暂无数据</div>
+                      </div>
+                      <div style="flex: 1; overflow: hidden;">
+                        <div style="font-weight: 500; color: var(--text);">MEM</div>
+                        <div id="top-mem-list" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">暂无数据</div>
+                      </div>
+                    </div>
+                  </div>
                   <div class="resource-metric resource-network" id="resource-network" hidden>
                     <div class="resource-metric-line">
                       <strong id="resource-network-iface" class="resource-detail">-</strong>

@@ -29,7 +29,7 @@ interface ResourceUsage {
   percent: number;
 }
 
-interface ProcessEntry {
+export interface ProcessEntry {
   pid: number;
   user: string;
   memoryBytes: number | null;
@@ -53,6 +53,8 @@ interface ProcessSnapshot {
     network: NetworkSample[] | null;
   };
   processes: ProcessEntry[];
+  topCpu?: ProcessEntry[];
+  topMem?: ProcessEntry[];
   timestamp: number;
 }
 
@@ -94,6 +96,8 @@ interface ProcessManagerOptions {
   // selected interface is the baseline (rate shows zero) and the next one
   // starts drawing the sparkline.
   onNetworkSample?: (samples: NetworkSample[] | null, timestamp: number) => void;
+  /** 当收到 Top 5 CPU/Memory 进程时触发。 */
+  onTopProcesses?: (topCpu: ProcessEntry[], topMem: ProcessEntry[]) => void;
 }
 
 const MAX_PROCESSES = 512;
@@ -209,6 +213,7 @@ export class ProcessManager {
   private readonly onReconnect: ((zh: string, en: string) => void) | undefined;
   private readonly onToast: ((zh: string, en: string, kind: 'info' | 'error') => void) | undefined;
   private readonly onNetworkSample: ((samples: NetworkSample[] | null, timestamp: number) => void) | undefined;
+  private readonly onTopProcesses: ((topCpu: ProcessEntry[], topMem: ProcessEntry[]) => void) | undefined;
   /** Recreated by every `mount()` so `unmount()` drops every panel listener at once. */
   private bindings = new AbortController();
   /** True while this manager owns the shared process panel DOM — see `mount()`. */
@@ -239,6 +244,7 @@ export class ProcessManager {
     this.onReconnect = options.onReconnect;
     this.onToast = options.onToast;
     this.onNetworkSample = options.onNetworkSample;
+    this.onTopProcesses = options.onTopProcesses;
     // No DOM work at construction: a background session owns no DOM. The owner
     // calls `mount()` when this manager's session comes to the front.
   }
@@ -455,6 +461,9 @@ export class ProcessManager {
       // The callback is invoked even when network is null so the frontend
       // can decide whether to hide the block on its own.
       this.onNetworkSample?.(message.metrics.network, message.timestamp);
+      if (message.topCpu && message.topMem) {
+        this.onTopProcesses?.(message.topCpu, message.topMem);
+      }
       return;
     }
     if (!message || typeof message !== 'object' || Array.isArray(message)) return;
