@@ -18,7 +18,7 @@ declare const __APP_VERSION__: string;
 declare const __APP_BUILD_TIME__: string;
 import { FileTree } from './file-tree';
 import { countryFlag } from './flags';
-import { ProcessManager, collectProcessManagerElements, type NetworkSample, type ProcessEntry } from './process-manager';
+import { ProcessManager, collectProcessManagerElements, type NetworkSample } from './process-manager';
 import { resetTerminalForConnection } from './terminal-session';
 import { createTerminalTools, type TerminalToolsController } from './terminal-tools';
 import { WebSocketReconnectManager } from './ws-reconnect';
@@ -292,8 +292,6 @@ const ui = {
   resourceNetwork: element<HTMLElement>('resource-network'),
   resourceNetworkIface: element<HTMLElement>('resource-network-iface'),
   resourceNetworkSelect: element<HTMLSelectElement>('resource-network-select'),
-  topCpuList: element<HTMLElement>('top-cpu-list'),
-  topMemList: element<HTMLElement>('top-mem-list'),
   resourceNetworkRateUp: element<HTMLElement>('resource-network-rate-up'),
   resourceNetworkRateDown: element<HTMLElement>('resource-network-rate-down'),
   resourceNetworkSparkline: element<HTMLCanvasElement>('resource-network-sparkline'),
@@ -809,7 +807,6 @@ function attachSessionRuntime(session: SessionContext): void {
     onToast: (zh, en, kind) => { if (isFront(session)) toast(bilingual(zh, en), kind); },
     // One throughput graph on screen: only the visible session feeds it.
     onNetworkSample: (sample, timestamp) => { if (isFront(session)) updateNetworkMetric(sample, timestamp); },
-    onTopProcesses: (topCpu, topMem) => { if (isFront(session)) renderTopProcesses(topCpu, topMem); },
   });
 }
 
@@ -1509,22 +1506,6 @@ function updateUptime(): void {
 function paintConnectionMetrics(session: SessionContext): void {
   ui.metricLatency.textContent = session.latencyMs > 0 ? `${Math.round(session.latencyMs)} ms` : '-- ms';
   ui.metricSpeed.textContent = `↑ ${formatNetworkRate(session.netTxRate)}  ↓ ${formatNetworkRate(session.netRxRate)}`;
-}
-
-function renderTopProcesses(topCpu: ProcessEntry[], topMem: ProcessEntry[]): void {
-  const renderList = (element: HTMLElement, processes: ProcessEntry[], valueKey: 'cpuPercent' | 'memoryPercent') => {
-    if (processes.length === 0) {
-      element.textContent = '暂无数据';
-      return;
-    }
-    element.innerHTML = processes.map(p => {
-      const value = p[valueKey] ?? 0;
-      return `<span style="display: block;">${p.command} <span style="float: right;">${value.toFixed(1)}%</span></span>`;
-    }).join('');
-  };
-
-  renderList(ui.topCpuList, topCpu, 'cpuPercent');
-  renderList(ui.topMemList, topMem, 'memoryPercent');
 }
 
 function resetConnectionMetrics(session: SessionContext): void {

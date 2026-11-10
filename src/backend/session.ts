@@ -1216,16 +1216,7 @@ export class SSHSession {
 
   private emitProcessSnapshot(raw: string): void {
     const snapshot = parseTopSnapshot(raw);
-    if (snapshot) {
-      // 提取 Top 5 CPU 和 Memory 进程
-      const sortedByCpu = [...snapshot.processes].sort((a, b) => (b.cpuPercent ?? 0) - (a.cpuPercent ?? 0));
-      const topCpu = sortedByCpu.slice(0, 5);
-
-      const sortedByMem = [...snapshot.processes].sort((a, b) => (b.memoryPercent ?? 0) - (a.memoryPercent ?? 0));
-      const topMem = sortedByMem.slice(0, 5);
-
-      this.sendProcessJson({ type: 'process_snapshot', ...snapshot, topCpu, topMem });
-    }
+    if (snapshot) this.sendProcessJson({ type: 'process_snapshot', ...snapshot });
   }
 
   private expirePendingProcessChannelOpen(expected: PendingProcessChannelOpen): void {
