@@ -190,10 +190,23 @@ export class SFTPHandler {
       this.validatePath(path);
       if (this.upload) throw new Error('Another upload is already in progress');
       if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE_SIZE) throw new Error('Invalid upload size or file exceeds the 64 MiB transfer limit');
+      // The overwrite path writes a temp file and renames it over the target,
+      // so the new file starts with the default mode. Carry the old mode over,
+      // otherwise editing a shell script in place would drop its +x bit.
+      let permissions: number | undefined;
+      if (overwrite) {
+        try {
+          const attrs = await this.client.stat(path);
+          if (attrs.permissions !== undefined) permissions = attrs.permissions & 0o7777;
+        } catch {
+          // The destination may have disappeared; the upload creates it below.
+        }
+      }
       const uploadPath = overwrite ? this.temporaryUploadPath(path) : path;
       const handle = await this.client.openFile(
         uploadPath,
         SFTP_OPEN_FLAGS.WRITE | SFTP_OPEN_FLAGS.CREATE | SFTP_OPEN_FLAGS.TRUNCATE | SFTP_OPEN_FLAGS.EXCLUSIVE,
+        permissions === undefined ? undefined : { permissions },
       );
       this.upload = {
         requestId,

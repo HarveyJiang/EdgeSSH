@@ -311,6 +311,29 @@ test('离开再返回文件页，迟到的凭据不会启动已取消会话', as
   expect(fixture.sshSockets).toHaveLength(0);
 });
 
+test('在线编辑直接保存文本文件', async ({ page }) => {
+  const fixture = await fileFixture(page);
+  await connectFiles(page);
+  await expect(page.locator('#file-edit')).toBeDisabled();
+  await page.locator('.files-list [role="treeitem"]').filter({ hasText: 'README.md' }).click();
+  await expect(page.locator('#file-edit')).toBeEnabled();
+  await page.locator('#file-edit').click();
+  const dialog = page.locator('.file-editor-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.file-editor-path')).toHaveText('/root/README.md');
+  await expect(dialog.locator('.file-editor-input')).toHaveValue('hello files\n');
+  await dialog.locator('.file-editor-input').fill('edited in browser\n');
+  page.once('dialog', (confirm) => confirm.dismiss());
+  await dialog.locator('.file-editor-cancel').click();
+  await expect(dialog).toBeVisible();
+  await dialog.locator('.file-editor-save').click();
+  await expect(dialog).toBeHidden();
+  expect(Buffer.concat(fixture.uploaded)).toEqual(Buffer.from('edited in browser\n'));
+  expect(fixture.calls).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: 'sftp_upload_start', path: '/root/README.md', overwrite: true }),
+  ]));
+});
+
 test('会话授权失败后可重试，文件操作保持禁用', async ({ page }) => {
   await fileFixture(page);
   await page.route('**/api/session', (route) => route.fulfill({ status: 403, json: { error: '会话授权失败，请重新登录。' } }));

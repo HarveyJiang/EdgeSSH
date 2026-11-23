@@ -2,6 +2,12 @@ import type { FileListView } from './file-list-view';
 
 export const MAX_SFTP_FILE_SIZE = 64 * 1024 * 1024;
 export const SFTP_UPLOAD_CHUNK_SIZE = 64 * 1024;
+/**
+ * In-browser editing keeps the whole file in a `<textarea>`, so it is capped
+ * well below the SFTP transfer limit: past a few MiB every keystroke starts to
+ * drag and the browser tab becomes the bottleneck, not the SSH channel.
+ */
+export const MAX_EDITOR_FILE_SIZE = 8 * 1024 * 1024;
 
 export interface FileManagerElements {
   panel: HTMLElement;
@@ -12,6 +18,7 @@ export interface FileManagerElements {
   refresh: HTMLButtonElement;
   upload: HTMLButtonElement;
   download: HTMLButtonElement;
+  edit: HTMLButtonElement;
   mkdir: HTMLButtonElement;
   rename: HTMLButtonElement;
   delete: HTMLButtonElement;
@@ -83,6 +90,12 @@ interface DownloadState {
   requestId: string;
   path: string;
   name: string;
+  /**
+   * `save` streams the bytes to a browser download; `editor` keeps them in
+   * memory so the online editor can open them instead of asking the user to
+   * download, edit locally and upload again.
+   */
+  mode: 'save' | 'editor';
   expectedSize: number | null;
   received: number;
   chunks: ArrayBuffer[];
@@ -124,6 +137,7 @@ export function collectFileManagerElements(root: ParentNode = document): FileMan
     refresh: requiredElement(root, 'file-refresh'),
     upload: requiredElement(root, 'file-upload'),
     download: requiredElement(root, 'file-download'),
+    edit: requiredElement(root, 'file-edit'),
     mkdir: requiredElement(root, 'file-mkdir'),
     rename: requiredElement(root, 'file-rename'),
     delete: requiredElement(root, 'file-delete'),
@@ -186,6 +200,15 @@ function sizeExceedsLimit(value: number | string): boolean {
   return value.length > limit.length || (value.length === limit.length && value > limit);
 }
 
+/** Editor cap, deliberately stricter than the transfer cap. Unknown sizes pass. */
+function exceedsEditorLimit(value: unknown): boolean {
+  const size = fileSizeValue(value);
+  if (size === null) return false;
+  if (typeof size === 'number') return size > MAX_EDITOR_FILE_SIZE;
+  const limit = String(MAX_EDITOR_FILE_SIZE);
+  return size.length > limit.length || (size.length === limit.length && size > limit);
+}
+
 function transferSize(value: unknown): number | null {
   const size = fileSizeValue(value);
   if (size === null || sizeExceedsLimit(size)) return null;
@@ -223,6 +246,21 @@ export class FileManager {
   private uploadState: UploadState | null = null;
   private downloadState: DownloadState | null = null;
   private uploadConfirmationPending = false;
+  /** Lazily created `<dialog>` so a background session never touches the page. */
+  private editorDialog: HTMLDialogElement | null = null;
+  private editorTitle: HTMLElement | null = null;
+  private editorPathText: HTMLElement | null = null;
+  private editorTextarea: HTMLTextAreaElement | null = null;
+  private editorError: HTMLElement | null = null;
+  private editorSaveButton: HTMLButtonElement | null = null;
+  private editorCancelButton: HTMLButtonElement | null = null;
+  private editorEyebrow: HTMLElement | null = null;
+  /** Remote path open in the editor, null when the dialog is closed. */
+  private editorPath: string | null = null;
+  private editorOriginalText = '';
+  private editorSaving = false;
+  private editorClosing = false;
+  private editorReturnFocus: HTMLElement | null = null;
   private messageQueue: Promise<void> = Promise.resolve();
   private statusCopy: LocalizedText = DISCONNECTED;
   /** Auto-reconnect state: true while the SSH session is alive and we want a file channel. */
@@ -396,6 +434,11 @@ export class FileManager {
     this.activeListRequest = null;
     this.rejectTreeLists(new Error('SFTP session reset'));
     this.abortTransfers(false);
+    if (this.editorDialog?.open) this.editorDialog.close();
+    this.editorPath = null;
+    this.editorOriginalText = '';
+    this.editorSaving = false;
+    this.editorClosing = false;
     if (socket) {
       if (socket.readyState === WebSocket.OPEN) {
         try { socket.send(JSON.stringify({ type: 'sftp_close' })); } catch { /* Socket is already unusable. */ }
@@ -415,6 +458,7 @@ export class FileManager {
     // Full teardown, unlike `unmount()`: even retained state goes away.
     this.mounted = false;
     this.reset();
+    this.disposeEditor();
     this.cwdListeners.clear();
     this.bindings.abort();
   }
@@ -452,6 +496,7 @@ export class FileManager {
     this.updateStatusText(this.statusCopy);
     this.renderEntries();
     this.updateProgressLanguage();
+    this.updateEditorLanguage();
   }
 
   setListView(view: FileListView | null): void {
@@ -502,21 +547,21 @@ export class FileManager {
     return () => { this.cwdListeners.delete(listener); };
   }
 
-  async upload(file: File, destination?: string): Promise<void> {
-    if (!this.ready || this.hasTransfer() || this.uploadConfirmationPending) return;
+  async upload(file: File, destination?: string, options: { overwrite?: boolean } = {}): Promise<boolean> {
+    if (!this.ready || this.hasTransfer() || this.uploadConfirmationPending) return false;
     if (file.size > MAX_SFTP_FILE_SIZE) {
       this.showError(this.localize({ zh: '文件不能超过 64 MiB。', en: 'Files cannot exceed 64 MiB.' }));
-      return;
+      return false;
     }
     let path: string;
     try { path = normalizePath(destination ?? joinPath(this.cwd, file.name)); } catch {
       this.showError(this.localize({ zh: '上传文件名无效。', en: 'The upload file name is invalid.' }));
-      return;
+      return false;
     }
     const existing = this.entries.find((entry) => joinPath(this.cwd, entry.name) === path);
     const generation = this.generation;
-    let overwrite = false;
-    if (existing) {
+    let overwrite = options.overwrite === true;
+    if (existing && !overwrite) {
       this.uploadConfirmationPending = true;
       this.updateControls();
       try {
@@ -528,16 +573,16 @@ export class FileManager {
         if (generation === this.generation) {
           this.showError(this.localize({ zh: '无法确认是否覆盖文件。', en: 'Could not confirm whether to overwrite the file.' }));
         }
-        return;
+        return false;
       } finally {
         if (generation === this.generation) {
           this.uploadConfirmationPending = false;
           this.updateControls();
         }
       }
-      if (!overwrite) return;
+      if (!overwrite) return false;
     }
-    if (generation !== this.generation || !this.ready || this.hasTransfer() || !this.isSocketOpen()) return;
+    if (generation !== this.generation || !this.ready || this.hasTransfer() || !this.isSocketOpen()) return false;
     const requestId = this.createRequest('upload', path);
     this.uploadState = {
       generation: this.generation,
@@ -555,9 +600,10 @@ export class FileManager {
     this.showProgress('upload', file.name, 0);
     this.send({ type: 'sftp_upload_start', requestId, path, size: file.size, overwrite });
     this.updateControls();
+    return true;
   }
 
-  downloadSelected(): void {
+  downloadSelected(mode: 'save' | 'editor' = 'save'): void {
     const entry = this.selectedEntry();
     if (!this.ready || !entry || entry.type !== 'file' || this.hasTransfer()) return;
     if (sizeExceedsLimit(entry.size)) {
@@ -571,6 +617,7 @@ export class FileManager {
       requestId,
       path,
       name: entry.name,
+      mode,
       expectedSize: transferSize(entry.size),
       received: 0,
       chunks: [],
@@ -585,6 +632,209 @@ export class FileManager {
 
   cancelTransfer(): void {
     this.requestTransferCancel();
+  }
+
+  /** Open the selected text file in the in-browser editor (no local download). */
+  private openEditor(): void {
+    const entry = this.selectedEntry();
+    if (!this.ready || !entry || entry.type !== 'file' || this.hasTransfer() || this.uploadConfirmationPending) return;
+    if (exceedsEditorLimit(entry.size)) {
+      this.showError(this.localize({
+        zh: `在线编辑仅支持 ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB 以内的文件。`,
+        en: `Online editing supports files up to ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB.`,
+      }));
+      return;
+    }
+    this.downloadSelected('editor');
+  }
+
+  /** Build the modal editor on first use; it lives on `<body>`, not in the panel. */
+  private ensureEditorDialog(): void {
+    if (this.editorDialog) return;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'file-editor-dialog';
+    dialog.setAttribute('aria-labelledby', 'file-editor-title');
+    dialog.innerHTML = `<header class="file-editor-head">
+        <p class="file-editor-eyebrow"></p>
+        <h2 id="file-editor-title"></h2>
+        <p class="file-editor-path"></p>
+      </header>
+      <textarea class="file-editor-input" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+      <p class="file-editor-error" role="alert" hidden></p>
+      <footer class="file-editor-actions">
+        <button class="file-editor-cancel" type="button"></button>
+        <button class="file-editor-save" type="button"></button>
+      </footer>`;
+    document.body.append(dialog);
+    this.editorDialog = dialog;
+    this.editorEyebrow = dialog.querySelector<HTMLElement>('.file-editor-eyebrow');
+    this.editorTitle = dialog.querySelector<HTMLElement>('#file-editor-title');
+    this.editorPathText = dialog.querySelector<HTMLElement>('.file-editor-path');
+    this.editorTextarea = dialog.querySelector<HTMLTextAreaElement>('.file-editor-input');
+    this.editorError = dialog.querySelector<HTMLElement>('.file-editor-error');
+    this.editorSaveButton = dialog.querySelector<HTMLButtonElement>('.file-editor-save');
+    this.editorCancelButton = dialog.querySelector<HTMLButtonElement>('.file-editor-cancel');
+    this.editorCancelButton?.addEventListener('click', () => { void this.closeEditor(); });
+    this.editorSaveButton?.addEventListener('click', () => { void this.saveEditor(); });
+    this.editorTextarea?.addEventListener('input', () => this.hideEditorError());
+    dialog.addEventListener('cancel', (event) => {
+      // Esc: keep the dialog open when the save is in flight.
+      event.preventDefault();
+      void this.closeEditor();
+    });
+    dialog.addEventListener('close', () => this.handleEditorClose());
+    this.updateEditorLanguage();
+  }
+
+  private openEditorDialog(path: string, name: string, text: string): void {
+    this.ensureEditorDialog();
+    const dialog = this.editorDialog;
+    if (!dialog) return;
+    this.editorPath = path;
+    this.editorOriginalText = text;
+    this.editorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (this.editorTitle) this.editorTitle.textContent = name;
+    if (this.editorPathText) this.editorPathText.textContent = path;
+    if (this.editorTextarea) {
+      this.editorTextarea.value = text;
+      this.editorTextarea.scrollTop = 0;
+      this.editorTextarea.scrollLeft = 0;
+    }
+    this.hideEditorError();
+    this.updateEditorButtons();
+    if (!dialog.open) dialog.showModal();
+    this.editorTextarea?.focus();
+    this.editorTextarea?.setSelectionRange(0, 0);
+    this.updateControls();
+  }
+
+  private async closeEditor(): Promise<void> {
+    const dialog = this.editorDialog;
+    if (!dialog?.open || this.editorSaving || this.editorClosing) return;
+    const changed = this.editorTextarea?.value !== this.editorOriginalText;
+    if (changed) {
+      this.editorClosing = true;
+      let confirmed = false;
+      try {
+        confirmed = await this.confirmAction(this.localize({
+          zh: '放弃尚未保存的修改？',
+          en: 'Discard unsaved changes?',
+        }));
+      } catch {
+        confirmed = false;
+      } finally {
+        this.editorClosing = false;
+      }
+      if (!confirmed || !dialog.open) return;
+    }
+    dialog.close();
+    if (this.ready) {
+      this.setStatus({
+        zh: `${this.entries.length} 个项目`,
+        en: `${this.entries.length} item${this.entries.length === 1 ? '' : 's'}`,
+      });
+    }
+  }
+
+  private handleEditorClose(): void {
+    this.editorPath = null;
+    this.editorOriginalText = '';
+    this.editorSaving = false;
+    this.editorClosing = false;
+    if (this.editorTextarea) this.editorTextarea.value = '';
+    this.hideEditorError();
+    const target = this.editorReturnFocus;
+    this.editorReturnFocus = null;
+    target?.focus();
+    this.updateControls();
+  }
+
+  private async saveEditor(): Promise<void> {
+    const path = this.editorPath;
+    const textarea = this.editorTextarea;
+    if (!path || !textarea || this.editorSaving) return;
+    if (!this.ready || !this.isSocketOpen()) {
+      this.showEditorError(this.localize({ zh: 'SFTP 连接已断开，无法保存。', en: 'The SFTP connection is closed, so the file cannot be saved.' }));
+      return;
+    }
+    if (this.hasTransfer() || this.uploadConfirmationPending) {
+      this.showEditorError(this.localize({ zh: '有传输正在进行，请稍后再保存。', en: 'A transfer is running; save again in a moment.' }));
+      return;
+    }
+    const text = textarea.value;
+    if (text.includes('\0')) {
+      this.showEditorError(this.localize({ zh: '内容包含二进制数据，无法保存为文本。', en: 'The content contains binary data and cannot be saved as text.' }));
+      return;
+    }
+    const bytes = new TextEncoder().encode(text);
+    if (bytes.byteLength > MAX_SFTP_FILE_SIZE) {
+      this.showEditorError(this.localize({ zh: '文件不能超过 64 MiB。', en: 'Files cannot exceed 64 MiB.' }));
+      return;
+    }
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    this.editorSaving = true;
+    this.hideEditorError();
+    this.updateEditorButtons();
+    let started = false;
+    try {
+      started = await this.upload(new File([bytes], name, { type: 'text/plain' }), path, { overwrite: true });
+    } catch {
+      started = false;
+    }
+    if (started) return;
+    this.editorSaving = false;
+    this.updateEditorButtons();
+    this.showEditorError(this.localize({ zh: '保存失败，上传未能开始。', en: 'Save failed: the upload did not start.' }));
+  }
+
+  private updateEditorLanguage(): void {
+    if (!this.editorDialog) return;
+    if (this.editorEyebrow) this.editorEyebrow.textContent = this.localize({ zh: '在线编辑', en: 'File editor' });
+    if (this.editorSaveButton) {
+      this.editorSaveButton.textContent = this.editorSaving
+        ? this.localize({ zh: '保存中…', en: 'Saving…' })
+        : this.localize({ zh: '保存', en: 'Save' });
+    }
+    if (this.editorCancelButton) this.editorCancelButton.textContent = this.localize({ zh: '取消', en: 'Cancel' });
+  }
+
+  private updateEditorButtons(): void {
+    this.updateEditorLanguage();
+    if (this.editorSaveButton) this.editorSaveButton.disabled = this.editorSaving;
+    if (this.editorCancelButton) this.editorCancelButton.disabled = this.editorSaving;
+  }
+
+  private showEditorError(message: string): void {
+    if (!this.editorDialog?.open || !this.editorError) {
+      this.showError(message);
+      return;
+    }
+    this.editorError.textContent = message;
+    this.editorError.hidden = false;
+  }
+
+  private hideEditorError(): void {
+    if (!this.editorError) return;
+    this.editorError.hidden = true;
+    this.editorError.textContent = '';
+  }
+
+  private disposeEditor(): void {
+    if (this.editorDialog?.open) this.editorDialog.close();
+    this.editorDialog?.remove();
+    this.editorDialog = null;
+    this.editorTitle = null;
+    this.editorPathText = null;
+    this.editorTextarea = null;
+    this.editorError = null;
+    this.editorSaveButton = null;
+    this.editorCancelButton = null;
+    this.editorEyebrow = null;
+    this.editorPath = null;
+    this.editorOriginalText = '';
+    this.editorSaving = false;
+    this.editorClosing = false;
+    this.editorReturnFocus = null;
   }
 
   async handle(data: SocketData): Promise<void> {
@@ -609,6 +859,7 @@ export class FileManager {
       if (file) void this.upload(file);
     }, { signal });
     this.elements.download.addEventListener('click', () => this.downloadSelected(), { signal });
+    this.elements.edit.addEventListener('click', () => this.openEditor(), { signal });
     this.elements.progressCancel.addEventListener('click', () => this.cancelTransfer(), { signal });
     this.elements.mkdir.addEventListener('click', () => void this.createDirectory(), { signal });
     this.elements.rename.addEventListener('click', () => void this.renameSelected(), { signal });
@@ -694,7 +945,7 @@ export class FileManager {
       return;
     }
     if (type === 'sftp_download_done') {
-      this.handleDownloadDone(message);
+      await this.handleDownloadDone(message);
       return;
     }
     if (type === 'sftp_upload_cancelled' || type === 'sftp_download_cancelled') {
@@ -1029,10 +1280,18 @@ export class FileManager {
   private handleUploadComplete(message: JsonRecord): void {
     const state = this.matchUpload(message);
     if (!state) return;
+    const savedEditor = this.editorPath !== null && state.path === this.editorPath;
     this.pending.delete(state.requestId);
     this.uploadState = null;
     this.hideProgress();
-    this.setStatus({ zh: `已上传 ${state.file.name}`, en: `Uploaded ${state.file.name}` });
+    this.setStatus(savedEditor
+      ? { zh: `已保存 ${state.file.name}`, en: `Saved ${state.file.name}` }
+      : { zh: `已上传 ${state.file.name}`, en: `Uploaded ${state.file.name}` });
+    if (savedEditor) {
+      this.editorSaving = false;
+      this.updateEditorButtons();
+      this.editorDialog?.close();
+    }
     this.updateControls();
     this.refresh();
   }
@@ -1047,11 +1306,18 @@ export class FileManager {
       this.sendDownloadCancel(state);
       return;
     }
-    if (state.expectedSize !== null && state.expectedSize > MAX_SFTP_FILE_SIZE) {
+    const limit = state.mode === 'editor' ? MAX_EDITOR_FILE_SIZE : MAX_SFTP_FILE_SIZE;
+    if (state.expectedSize !== null && state.expectedSize > limit) {
       state.cancelling = true;
       this.setStatus({ zh: '正在取消传输…', en: 'Cancelling transfer…' });
       this.updateProgressLanguage();
       this.sendDownloadCancel(state);
+      if (state.mode === 'editor') {
+        this.showError(this.localize({
+          zh: `在线编辑仅支持 ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB 以内的文件。`,
+          en: `Online editing supports files up to ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB.`,
+        }));
+      }
     }
   }
 
@@ -1073,11 +1339,18 @@ export class FileManager {
     else buffer = data;
     if (state !== this.downloadState || state.generation !== this.generation) return;
     if (state.cancelling) return;
-    if (state.received + buffer.byteLength > MAX_SFTP_FILE_SIZE) {
+    const limit = state.mode === 'editor' ? MAX_EDITOR_FILE_SIZE : MAX_SFTP_FILE_SIZE;
+    if (state.received + buffer.byteLength > limit) {
       state.cancelling = true;
       this.setStatus({ zh: '正在取消传输…', en: 'Cancelling transfer…' });
       this.updateProgressLanguage();
       this.sendDownloadCancel(state);
+      if (state.mode === 'editor') {
+        this.showError(this.localize({
+          zh: `在线编辑仅支持 ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB 以内的文件。`,
+          en: `Online editing supports files up to ${MAX_EDITOR_FILE_SIZE / 1024 / 1024} MiB.`,
+        }));
+      }
       return;
     }
     state.chunks.push(buffer);
@@ -1086,7 +1359,7 @@ export class FileManager {
     this.showProgress('download', state.name, total && total > 0 ? (state.received / total) * 100 : 0);
   }
 
-  private handleDownloadDone(message: JsonRecord): void {
+  private async handleDownloadDone(message: JsonRecord): Promise<void> {
     const state = this.matchDownload(message);
     if (!state) return;
     if (state.cancelling) {
@@ -1099,10 +1372,37 @@ export class FileManager {
       this.failTransfer(this.localize({ zh: '下载未完成，文件大小不匹配。', en: 'The download is incomplete: file size mismatch.' }));
       return;
     }
+    const generation = this.generation;
+    const mode = state.mode;
     this.pending.delete(state.requestId);
     this.downloadState = null;
-    this.saveBlob(new Blob(state.chunks), state.name);
     this.hideProgress();
+    if (mode === 'editor') {
+      let text: string | null = null;
+      try {
+        const bytes = new Uint8Array(await new Blob(state.chunks).arrayBuffer());
+        // A NUL byte or invalid UTF-8 means the editor would corrupt the file
+        // on save; refuse instead of rewriting it with replacement characters.
+        text = bytes.includes(0) ? null : new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch {
+        text = null;
+      }
+      if (generation !== this.generation) return;
+      if (text === null) {
+        this.setStatus({ zh: `无法在线编辑 ${state.name}`, en: `Cannot edit ${state.name} online` });
+        this.showError(this.localize({
+          zh: '仅支持 UTF-8 文本文件在线编辑。',
+          en: 'Only UTF-8 text files can be edited online.',
+        }));
+        this.updateControls();
+        return;
+      }
+      this.setStatus({ zh: `正在编辑 ${state.name}`, en: `Editing ${state.name}` });
+      this.openEditorDialog(state.path, state.name, text);
+      this.updateControls();
+      return;
+    }
+    this.saveBlob(new Blob(state.chunks), state.name);
     this.setStatus({ zh: `已下载 ${state.name}`, en: `Downloaded ${state.name}` });
     this.updateControls();
   }
@@ -1130,7 +1430,14 @@ export class FileManager {
         ? this.downloadState
         : null;
     if (transfer) {
+      const editorTransfer = this.editorDialog?.open === true && this.editorPath !== null && transfer.path === this.editorPath;
       this.abortTransfers(true);
+      if (editorTransfer) {
+        this.editorSaving = false;
+        this.updateEditorButtons();
+        this.showEditorError(serverMessage);
+        return;
+      }
     }
     this.showError(serverMessage);
   }
@@ -1294,6 +1601,7 @@ export class FileManager {
     this.elements.upload.disabled = !idle;
     this.elements.mkdir.disabled = !idle;
     this.elements.download.disabled = !idle || !selected || selected.type !== 'file' || sizeExceedsLimit(selected.size);
+    this.elements.edit.disabled = !idle || !selected || selected.type !== 'file' || exceedsEditorLimit(selected.size);
     this.elements.rename.disabled = !idle || !selected;
     this.elements.delete.disabled = !idle || !selected;
   }
@@ -1426,7 +1734,9 @@ export class FileManager {
     const name = this.elements.progress.dataset.name ?? '';
     const verb = operation === 'upload'
       ? this.localize({ zh: '上传', en: 'Uploading' })
-      : this.localize({ zh: '下载', en: 'Downloading' });
+      : this.downloadState?.mode === 'editor'
+        ? this.localize({ zh: '读取', en: 'Reading' })
+        : this.localize({ zh: '下载', en: 'Downloading' });
     this.elements.progressLabel.textContent = transfer?.cancelling
       ? this.localize({ zh: `正在取消 ${name}…`, en: `Cancelling ${name}…` })
       : `${verb} ${name} ${Math.round(this.elements.progressBar.value)}%`;
