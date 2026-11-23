@@ -1683,6 +1683,8 @@ button:disabled {
   scrollbar-color: var(--term-scrollbar) transparent;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
+  /* 移动端横向滚动条优先：touch 只走横向手势，避免与页面纵向滚动冲突。 */
+  touch-action: pan-x;
 }
 
 .terminal-key {
