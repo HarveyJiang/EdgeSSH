@@ -295,6 +295,19 @@ body[data-view='dashboard'] { overflow-y: auto; background: var(--home-bg); }
 .session-card-meta { font-size: 11px; color: var(--home-muted); font-family: var(--home-mono); overflow-wrap: anywhere; }
 .session-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .session-card-actions .home-button { min-height: 34px; font-size: 12px; }
+/* 会话中心顶部的「目标主机」下拉 + 连接按钮：连接/重连都走这里，不用翻到主机列表。 */
+.sessions-connect { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--home-line); border-radius: 10px; background: var(--home-surface); }
+.sessions-connect-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 9px; background: var(--home-accent-soft); color: var(--home-accent-hover); flex-shrink: 0; }
+.sessions-host-field { display: flex; flex-direction: column; gap: 6px; flex: 1; max-width: 510px; min-width: 0; color: var(--home-muted); font-size: 12px; }
+.sessions-host-field select { width: 100%; min-width: 0; height: 42px; padding: 0 32px 0 12px; color: var(--home-ink); background: var(--home-bg); border: 1px solid var(--home-line); border-radius: 6px; font: 13px var(--home-mono); }
+.sessions-connect-hint { margin-left: auto; font-size: 12px; color: var(--home-muted); text-align: right; }
+#dashboard .sessions-host-field select { font-size: 16px; }
+@media (max-width: 1100px) {
+  .sessions-page { padding: 24px; }
+  .sessions-connect { flex-wrap: wrap; }
+  .sessions-host-field { flex-basis: calc(100% - 64px); }
+  .sessions-connect-hint { margin-left: 0; flex-basis: 100%; text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) { #dashboard * { transition: none !important; } }
 
 /* 窄屏时顶栏六个按钮放不下：收紧间距并允许文字按钮收缩（超出部分省略号），保证不越出屏幕。 */

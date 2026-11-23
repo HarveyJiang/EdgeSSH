@@ -340,6 +340,7 @@ export class Dashboard {
     this.globe?.setHosts(hosts);
     this.get('#region-count').textContent = `${new Set(hosts.map((host) => host.location?.countryCode).filter(Boolean)).size} 个国家 / 地区`;
     this.get('#host-total').textContent = `${hosts.length} 台主机 · ${hosts.filter((host) => !host.location).length} 台位置未知`;
+    if (!this.sessionsView.hidden) this.renderSessionsHostPicker();
   }
 
   async refresh(): Promise<void> {
@@ -428,6 +429,7 @@ export class Dashboard {
     this.selectNavigation('rail-sessions');
     this.globe?.setActive(false);
     this.sessionsView.hidden = false;
+    this.renderSessionsHostPicker();
     this.renderSessionList();
     this.get('#sessions-heading').focus();
   }
@@ -484,6 +486,34 @@ export class Dashboard {
         else this.closeSessionMenu();
       }
     }
+  }
+
+  /**
+   * "会话中心"顶部的「目标主机」下拉 + 连接按钮：断了就从这里点回去，不用翻到
+   * 总览的主机列表里点。下拉只列出真实存在过的云端主机（含分组内名字），
+   * 点连接走 dashboard actions 的同一路径（applyProfile → connect），
+   * 会话中心只是视图，真正的会话归 main.ts 的 SessionManager 所有。
+   */
+  private renderSessionsHostPicker(): void {
+    const select = this.get<HTMLSelectElement>('#sessions-host');
+    let optionsHtml = '<option value="">请选择主机</option>';
+    for (const host of this.hosts) {
+      optionsHtml += `<option value="${host.id}">${host.name} · ${host.host}</option>`;
+    }
+    select.innerHTML = optionsHtml;
+    const currentSelect = select.value;
+    if (currentSelect) select.value = currentSelect;
+    const connectButton = document.getElementById('sessions-connect') as HTMLButtonElement | null;
+    if (connectButton) connectButton.disabled = !currentSelect;
+    select.addEventListener('change', () => {
+      const button = document.getElementById('sessions-connect') as HTMLButtonElement | null;
+      if (button) button.disabled = !select.value;
+    });
+    connectButton?.addEventListener('click', () => {
+      const selectedId = select.value;
+      const host = selectedId ? (this.hosts.find((h) => h.id === selectedId) ?? this.hosts.find((h) => h.name === selectedId)) : undefined;
+      if (host) void this.actions.connect(host);
+    });
   }
 
   private renderSessionCount(): void {
@@ -651,7 +681,16 @@ export class Dashboard {
         <h1 id="sessions-heading" tabindex="-1">会话中心</h1>
         <p>每一条会话各自连着一台主机；切换到工作台查看它，或单独断开。</p></div>
         <span class="home-eyebrow" id="sessions-total">0 个会话</span></header>
+      <section class="sessions-connect" aria-label="会话中心连接">
+        <span class="sessions-connect-icon">${icon('terminal')}</span>
+        <label class="sessions-host-field" for="sessions-host"><span>目标主机</span>
+          <select id="sessions-host" aria-describedby="sessions-host-hint"><option value="">请选择主机</option></select>
+        </label>
+        <button id="sessions-connect" class="home-button primary" type="button" disabled>连接主机</button>
+        <span id="sessions-connect-hint" class="sessions-connect-hint">使用已保存的 SSH 凭据安全连接</span>
+      </section>
       <div id="session-list" class="session-list" aria-live="polite"></div>`;
+    this.renderSessionsHostPicker();
   }
 
   private selectNavigation(id: string): void {
