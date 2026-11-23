@@ -495,7 +495,9 @@ export class Dashboard {
    * 会话中心只是视图，真正的会话归 main.ts 的 SessionManager 所有。
    */
   private renderSessionsHostPicker(): void {
+    if (this.sessionsView.hidden) return;
     const select = this.get<HTMLSelectElement>('#sessions-host');
+    if (!select) return;
     let optionsHtml = '<option value="">请选择主机</option>';
     for (const host of this.hosts) {
       optionsHtml += `<option value="${host.id}">${host.name} · ${host.host}</option>`;
