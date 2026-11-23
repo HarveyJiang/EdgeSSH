@@ -1385,7 +1385,7 @@ button:disabled {
   font-size: 8px;
 }
 
-/* 宽屏终端开关：开启时在「终端内容不满 80 列」时被标记为 pressed。 */
+/* 宽屏终端开关：开启（或窄屏按 80 列保底时）时为 pressed 态。 */
 .terminal-actions .toolbar-button[aria-pressed='true'] {
   border-color: var(--term-accent);
   background: var(--term-accent-soft);
