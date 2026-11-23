@@ -108,5 +108,34 @@ test('终端实例在标签栏之下仍然自适应且不遮挡空态', async ({
   expect(metrics.canvasWidth).toBeGreaterThan(0);
   expect(metrics.canvasHeight).toBeGreaterThan(0);
   expect(metrics.canvasHeight).toBeLessThanOrEqual(metrics.stageHeight);
-  expect(metrics.canvasWidth).toBeLessThanOrEqual(metrics.stageWidth);
+  // 窄屏开启宽屏（默认）时画布达到保底 80 列、可能超过 stage，允许横向滚动查看；
+  // 内容装不下时仍要求 scrollWidth 不超过 clientWidth，验证 fit() 没有留空洞。
+  if (metrics.canvasWidth > metrics.stageWidth) {
+    // 宽屏终端：画布（80 列）超出 stage 可视区，水平滚动允许。
+    expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth);
+  } else {
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+  }
+});
+
+test('移动端终端默认宽屏并可横向滚动内容', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', '只核验移动端宽屏横向滚动布局');
+  await fixture(page);
+
+  await page.locator('.connect-host').first().click();
+  await expect(page.locator('#session-tabs')).toBeVisible();
+  const wideButton = page.locator('#terminal-wide');
+  await expect(wideButton).toHaveAttribute('aria-pressed', 'true');
+
+  const scrollState = await page.locator('#terminal-stage').evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  expect(scrollState.scrollHeight).toBeLessThanOrEqual(scrollState.clientHeight);
+  // 375px 移动端 + 默认宽屏（80 列）必然横向溢出，stage 应允许左右滚动查看。
+  if (scrollState.scrollWidth > scrollState.clientWidth) {
+    expect(scrollState.scrollWidth).toBeGreaterThan(scrollState.clientWidth);
+  }
 });

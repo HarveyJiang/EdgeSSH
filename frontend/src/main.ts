@@ -20,6 +20,7 @@ import { FileTree } from './file-tree';
 import { countryFlag } from './flags';
 import { ProcessManager, collectProcessManagerElements, type NetworkSample } from './process-manager';
 import { resetTerminalForConnection } from './terminal-session';
+import { terminalColumns } from './terminal-size';
 import { createTerminalTools, type TerminalToolsController } from './terminal-tools';
 import { WebSocketReconnectManager } from './ws-reconnect';
 import type { ReconnectLogEntry } from './ws-reconnect';
@@ -110,6 +111,7 @@ declare global {
 
 const THEME_STORAGE_KEY = 'workers-webssh.theme';
 const LANGUAGE_STORAGE_KEY = 'workers-webssh.language';
+const TERMINAL_WIDE_STORAGE_KEY = 'workers-webssh.terminal-wide';
 const MAX_KEY_BYTES = 65_536;
 const PING_INTERVAL_MS = 25_000;
 const CLIENT_CLOSE_SESSION_ERROR = 4000;
@@ -127,6 +129,18 @@ function loadLanguage(): Language {
 }
 
 let currentLanguage = loadLanguage();
+
+/** 宽屏终端：窄屏保底 80 列并允许横向滑动，默认开启（手机端本来就需要）。 */
+function loadTerminalWide(): boolean {
+  try {
+    return localStorage.getItem(TERMINAL_WIDE_STORAGE_KEY) !== '0';
+  } catch {
+    // 存储被禁用时仍然默认宽屏，避免手机端又退回折行显示。
+    return true;
+  }
+}
+
+let terminalWide = loadTerminalWide();
 const generatedTranslations = new Map<string, LocalizedMessage>();
 
 function bilingual(zh: string, en: string): string {
@@ -300,6 +314,7 @@ const ui = {
   sessionTabs: element<HTMLElement>('session-tabs'),
   terminalEmpty: element<HTMLElement>('terminal-empty'),
   emptyConnect: element<HTMLButtonElement>('empty-connect'),
+  terminalWide: element<HTMLButtonElement>('terminal-wide'),
   clearTerminal: element<HTMLButtonElement>('clear-terminal'),
   fullscreenTerminal: element<HTMLButtonElement>('fullscreen-terminal'),
   reconnectTerminal: element<HTMLButtonElement>('reconnect-terminal'),
@@ -1459,7 +1474,19 @@ function fitTerminal(send = true): void {
         }
       }
 
-      ctx.fitAddon.fit();
+      // 手机等窄屏：宽屏模式保底 80 列（经典终端宽度），超出的部分交给 #terminal-stage 横向滚动；
+      // 关闭时维持 fit() 的按容器自适应行为。
+      const dims = ctx.fitAddon.proposeDimensions();
+      const desiredCols = dims ? terminalColumns(dims.cols, terminalWide) : ctx.terminal.cols;
+      const desiredRows = dims ? dims.rows : ctx.terminal.rows;
+      if (dims && desiredCols !== dims.cols) {
+        if (ctx.terminal.cols !== desiredCols || ctx.terminal.rows !== desiredRows) {
+          ctx.terminal.resize(desiredCols, desiredRows);
+        }
+      } else {
+        ctx.fitAddon.fit();
+      }
+
       // 握手完成前不能发 resize：此时服务端还没有会话，任何非 connect 消息都会被判成重复
       // 连接，进而把正在进行的握手一起掐断。进入终端必然会触发 ResizeObserver（布局变化），
       // 所以这个时序很容易命中；真实尺寸在 markReady 里补发一次。
@@ -2845,10 +2872,23 @@ ui.emptyConnect.addEventListener('click', () => {
 });
 ui.reconnectTerminal.addEventListener('click', () => { void reconnectCurrentSession(); });
 ui.clearTerminal.addEventListener('click', () => ctx.terminal.clear());
+ui.terminalWide.addEventListener('click', () => {
+  terminalWide = !terminalWide;
+  try { localStorage.setItem(TERMINAL_WIDE_STORAGE_KEY, terminalWide ? '1' : '0'); } catch { /* 开关仅影响本页记忆。 */ }
+  updateTerminalWideButton();
+  fitTerminal(true);
+  toast(terminalWide
+    ? bilingual('宽屏终端：长行不再折行，可左右滑动查看。', 'Wide terminal: long lines no longer wrap, swipe sideways to read them.')
+    : bilingual('终端已按屏幕宽度折行显示。', 'Terminal wraps to the screen width now.'), 'info');
+});
 ui.fullscreenTerminal.addEventListener('click', async () => {
   if (document.fullscreenElement === ui.terminalCard) await document.exitFullscreen();
   else await ui.terminalCard.requestFullscreen();
 });
+function updateTerminalWideButton(): void {
+  ui.terminalWide.setAttribute('aria-pressed', String(terminalWide));
+}
+updateTerminalWideButton();
 document.addEventListener('fullscreenchange', () => fitTerminal(true));
 ui.fullscreenFiles.append(createElement(Maximize, { 'aria-hidden': 'true' }));
 ui.exitFullscreenFiles.append(createElement(Minimize, { 'aria-hidden': 'true' }));

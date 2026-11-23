@@ -1385,6 +1385,13 @@ button:disabled {
   font-size: 8px;
 }
 
+/* 宽屏终端开关：开启时在「终端内容不满 80 列」时被标记为 pressed。 */
+.terminal-actions .toolbar-button[aria-pressed='true'] {
+  border-color: var(--term-accent);
+  background: var(--term-accent-soft);
+  color: var(--term-accent-text);
+}
+
 .session-tabs {
   /* The strip decides which session is in front, so it outranks floating panels
      (snippet window, z-index 5) that would otherwise swallow its taps on narrow
@@ -1636,7 +1643,11 @@ button:disabled {
   position: relative;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-scrollbar) transparent;
   padding: 10px 8px 7px 12px;
   background:
     linear-gradient(var(--term-scanline) 50%, transparent 50%) 0 0 / 100% 4px,
