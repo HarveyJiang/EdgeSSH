@@ -302,6 +302,7 @@ const ui = {
   emptyConnect: element<HTMLButtonElement>('empty-connect'),
   clearTerminal: element<HTMLButtonElement>('clear-terminal'),
   fullscreenTerminal: element<HTMLButtonElement>('fullscreen-terminal'),
+  reconnectTerminal: element<HTMLButtonElement>('reconnect-terminal'),
   eventMessage: element<HTMLElement>('event-message'),
   fileManagerTab: element<HTMLButtonElement>('file-manager-tab'),
   fileManagerPanel: element<HTMLElement>('file-manager-panel'),
@@ -2561,6 +2562,27 @@ function syncFormToSession(session: SessionContext): void {
   ui.username.value = params.username;
 }
 
+/**
+ * Manual reconnect (toolbar button). The automatic retry chain already covers
+ * unexpected drops; once it gave up — or the failure was never retryable — the
+ * user gets an explicit way back in instead of re-opening the panel to dial
+ * again. Reuses the idle/error session that already owns this form target, so
+ * a re-dial is a fresh run against the same credentials rather than a new tab.
+ */
+async function reconnectCurrentSession(): Promise<void> {
+  const state = ctx.state;
+  // A live or already-dialing session has nothing to reclaim; connect() itself
+  // reuses live targets, so the states that do have something to do are skipped.
+  if (state === 'connected' || state === 'connecting' || state === 'disconnecting') return;
+  try {
+    await connect();
+  } catch (error) {
+    // dialFailed() already renders validation failures through the form; a
+    // rejection here is only the promise boundary, so never surface it twice.
+    console.error('[EdgeSSH] manual reconnect failed', error);
+  }
+}
+
 /** Single-session entry point used by the toolbar and the compatibility API. */
 function disconnect(reason = bilingual('已由用户断开连接', 'Disconnected by user')): void {
   closeSession(ctx, reason);
@@ -2811,6 +2833,7 @@ ui.emptyConnect.addEventListener('click', () => {
   setPanelOpen(true);
   requestAnimationFrame(() => ui.host.focus());
 });
+ui.reconnectTerminal.addEventListener('click', () => { void reconnectCurrentSession(); });
 ui.clearTerminal.addEventListener('click', () => ctx.terminal.clear());
 ui.fullscreenTerminal.addEventListener('click', async () => {
   if (document.fullscreenElement === ui.terminalCard) await document.exitFullscreen();
