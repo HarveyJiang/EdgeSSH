@@ -782,6 +782,8 @@ function attachSessionRuntime(session: SessionContext): void {
   // Open against the session's own host instead of a page-wide `#terminal` node,
   // so a second session can get a sibling host inside the same stage.
   mountTerminal(session);
+  // 选中即复制：必须挂在 xterm 自己的选区事件上，DOM 选区对终端无效。
+  attachAutoCopyOnSelect(session.terminal);
   // The callbacks below feed widgets owned by whoever is in front, so a
   // background session's SFTP/status chatter never reaches them.
   session.fileManager = new FileManager({
@@ -2942,41 +2944,62 @@ ui.terminalStage.addEventListener('pointerdown', (event) => {
   }, 600);
 }, { passive: true });
 
-ui.terminalStage.addEventListener('pointerup', clearPressTimer);
+ui.terminalStage.addEventListener('pointerup', () => { clearPressTimer(); flushTerminalCopy(); });
 ui.terminalStage.addEventListener('pointercancel', clearPressTimer);
 ui.terminalStage.addEventListener('pointermove', (event) => {
   if (pressTimer === null) return;
   if (Math.abs(event.clientX - pressX) > 12 || Math.abs(event.clientY - pressY) > 12) clearPressTimer();
 }, { passive: true });
 
-/** 选中终端文本后自动复制到剪贴板（类似 Termius 的选中即复制）。 */
+// 选中终端文本后自动复制到剪贴板（类似 Termius 的选中即复制）。
+// 注意：xterm 把文字画在 canvas 上，选区只存在于它自己的模型里，
+// 浏览器的 window.getSelection() 永远拿不到，所以必须走 xterm 的选区 API。
 let lastCopiedText = '';
-function setupAutoCopyOnSelect(): void {
-  const copySelection = (): void => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
-    const text = sel.toString().trim();
-    if (!text || text === lastCopiedText) return;
-    // 只处理终端区域内的选择
-    try {
-      const range = sel.getRangeAt(0);
-      const container = range.commonAncestorContainer as Node;
-      if (!ui.terminalStage.contains(container)) return;
-    } catch {
-      return;
-    }
-    lastCopiedText = text;
-    // 2 秒后重置，允许重新复制相同内容
-    setTimeout(() => { lastCopiedText = ''; }, 2000);
-    void navigator.clipboard.writeText(text).then(() => {
-      toast(bilingual('已复制', 'Copied'), 'info');
-    }).catch(() => {
-      // 剪贴板不可用时静默失败
-    });
-  };
-  document.addEventListener('selectionchange', copySelection);
-  ui.terminalStage.addEventListener('mouseup', copySelection);
-  ui.terminalStage.addEventListener('keyup', copySelection);
+let copyToastAt = 0;
+let copyTimer: number | null = null;
+let pendingCopy = '';
+
+function writeTerminalClipboard(text: string): void {
+  const value = text.trim();
+  if (!value) {
+    // 选区被清空，允许之后再次复制同一段文本。
+    lastCopiedText = '';
+    return;
+  }
+  if (value === lastCopiedText) return;
+  lastCopiedText = value;
+  void navigator.clipboard.writeText(value).then(() => {
+    // 拖动选区会连续触发复制，toast 限流避免刷屏。
+    const now = Date.now();
+    if (now - copyToastAt < 1500) return;
+    copyToastAt = now;
+    toast(bilingual('已复制', 'Copied'), 'info');
+  }).catch(() => {
+    // 剪贴板不可用（非安全上下文或被拒绝）时静默失败。
+  });
+}
+
+/** 选区还在拖动时不必每次写入，稍作等待后只复制最终结果。 */
+function queueTerminalCopy(text: string): void {
+  pendingCopy = text;
+  if (copyTimer !== null) window.clearTimeout(copyTimer);
+  copyTimer = window.setTimeout(() => {
+    copyTimer = null;
+    writeTerminalClipboard(pendingCopy);
+  }, 150);
+}
+
+/** 鼠标松开时立刻落锤，避免异步等待丢失用户手势上下文。 */
+function flushTerminalCopy(): void {
+  if (copyTimer === null) return;
+  window.clearTimeout(copyTimer);
+  copyTimer = null;
+  writeTerminalClipboard(pendingCopy);
+}
+
+/** 给一个会话终端挂上「选中即复制」。 */
+function attachAutoCopyOnSelect(terminal: Terminal): void {
+  terminal.onSelectionChange(() => queueTerminalCopy(terminal.getSelection()));
 }
 
 pasteButton.addEventListener('click', async (clickEvent) => {
@@ -3102,7 +3125,6 @@ async function initialize(): Promise<void> {
   // Anything that was connected before this page loaded is still waiting on the
   // server; go and claim it back before the user notices anything was missing.
   await restorePersistedSessions();
-  setupAutoCopyOnSelect();
 }
 
 void initialize().catch((error) => {
