@@ -323,6 +323,8 @@ test('在线编辑直接保存文本文件', async ({ page }) => {
   await expect(dialog.locator('.file-editor-path')).toHaveText('/root/README.md');
   await expect(dialog.locator('.file-editor-input')).toHaveValue('hello files\n');
   await dialog.locator('.file-editor-input').fill('edited in browser\n');
+  await expect(dialog.locator('.file-editor-copy')).toBeVisible();
+  await dialog.locator('.file-editor-copy').click();
   page.once('dialog', (confirm) => confirm.dismiss());
   await dialog.locator('.file-editor-cancel').click();
   await expect(dialog).toBeVisible();

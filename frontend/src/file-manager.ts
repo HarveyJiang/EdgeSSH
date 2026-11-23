@@ -255,6 +255,7 @@ export class FileManager {
   private editorError: HTMLElement | null = null;
   private editorSaveButton: HTMLButtonElement | null = null;
   private editorCancelButton: HTMLButtonElement | null = null;
+  private editorCopyButton: HTMLButtonElement | null = null;
   private editorEyebrow: HTMLElement | null = null;
   /** Remote path open in the editor, null when the dialog is closed. */
   private editorPath: string | null = null;
@@ -663,6 +664,7 @@ export class FileManager {
       <textarea class="file-editor-input" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
       <p class="file-editor-error" role="alert" hidden></p>
       <footer class="file-editor-actions">
+        <button class="file-editor-copy" type="button"></button>
         <button class="file-editor-cancel" type="button"></button>
         <button class="file-editor-save" type="button"></button>
       </footer>`;
@@ -675,8 +677,10 @@ export class FileManager {
     this.editorError = dialog.querySelector<HTMLElement>('.file-editor-error');
     this.editorSaveButton = dialog.querySelector<HTMLButtonElement>('.file-editor-save');
     this.editorCancelButton = dialog.querySelector<HTMLButtonElement>('.file-editor-cancel');
+    this.editorCopyButton = dialog.querySelector<HTMLButtonElement>('.file-editor-copy');
     this.editorCancelButton?.addEventListener('click', () => { void this.closeEditor(); });
     this.editorSaveButton?.addEventListener('click', () => { void this.saveEditor(); });
+    this.editorCopyButton?.addEventListener('click', () => { void this.copyEditor(); });
     this.editorTextarea?.addEventListener('input', () => this.hideEditorError());
     dialog.addEventListener('cancel', (event) => {
       // Esc: keep the dialog open when the save is in flight.
@@ -797,12 +801,37 @@ export class FileManager {
         : this.localize({ zh: '保存', en: 'Save' });
     }
     if (this.editorCancelButton) this.editorCancelButton.textContent = this.localize({ zh: '取消', en: 'Cancel' });
+    if (this.editorCopyButton) this.editorCopyButton.textContent = this.localize({ zh: '复制', en: 'Copy' });
   }
 
   private updateEditorButtons(): void {
     this.updateEditorLanguage();
     if (this.editorSaveButton) this.editorSaveButton.disabled = this.editorSaving;
     if (this.editorCancelButton) this.editorCancelButton.disabled = this.editorSaving;
+    if (this.editorCopyButton) this.editorCopyButton.disabled = this.editorSaving;
+  }
+
+  /** Copy the in-editor text out (mobile friendly: long content, no save round-trip). */
+  private async copyEditor(): Promise<void> {
+    const textarea = this.editorTextarea;
+    const text = textarea?.value ?? '';
+    if (!textarea || !text) return;
+    textarea.focus();
+    textarea.select();
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch {
+      try {
+        copied = document.execCommand('copy');
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      this.showEditorError(this.localize({ zh: '复制失败，请长按文本手动选择。', en: 'Copy failed; long-press the text to select it manually.' }));
+    }
   }
 
   private showEditorError(message: string): void {
