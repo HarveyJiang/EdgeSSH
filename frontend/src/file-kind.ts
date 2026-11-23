@@ -26,6 +26,18 @@ export function fileKind(entry: Pick<SFTPEntry, 'name' | 'type'>): FileKind {
   return dot < 0 ? 'file' : extensions.get(name.slice(dot + 1)) ?? 'file';
 }
 
+/**
+ * 双击默认进在线编辑器的格式：文档、源码/脚本、配置。
+ * PDF 虽然归在 document 里却是二进制，图片和压缩包同理，一律仍走下载。
+ */
+const editableKinds = new Set<FileKind>(['document', 'script', 'config']);
+
+export function isEditableFile(entry: Pick<SFTPEntry, 'name' | 'type'>): boolean {
+  if (entry.type !== 'file') return false;
+  if (entry.name.toLowerCase().endsWith('.pdf')) return false;
+  return editableKinds.has(fileKind(entry));
+}
+
 export const fileKindLabels: Record<FileKind, { zh: string; en: string }> = {
   folder: { zh: '文件夹', en: 'Folder' },
   archive: { zh: '压缩包', en: 'Archive' },

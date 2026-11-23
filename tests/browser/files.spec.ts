@@ -334,6 +334,32 @@ test('在线编辑直接保存文本文件', async ({ page }) => {
   ]));
 });
 
+test('双击常见文本格式打开编辑器，其他格式仍下载', async ({ page }) => {
+  const fixture = await fileFixture(page);
+  await connectFiles(page);
+  await expect(page.locator('#file-upload')).toBeEnabled();
+  await page.locator('#file-upload-input').setInputFiles({
+    name: 'asset.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+  });
+  await expect(page.locator('.files-list')).toContainText('asset.zip');
+
+  const downloading = page.waitForEvent('download');
+  await page.locator('.files-list [role="treeitem"]').filter({ hasText: 'asset.zip' }).dblclick();
+  expect((await downloading).suggestedFilename()).toBe('asset.zip');
+  await expect(page.locator('#file-manager-progress')).toBeHidden();
+
+  await page.locator('.files-list [role="treeitem"]').filter({ hasText: 'README.md' }).dblclick();
+  const dialog = page.locator('.file-editor-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.file-editor-path')).toHaveText('/root/README.md');
+  await expect(dialog.locator('.file-editor-input')).toHaveValue('hello files\n');
+  await dialog.locator('.file-editor-cancel').click();
+  await expect(dialog).toBeHidden();
+  expect(fixture.calls.some((call) => call.type === 'sftp_download' && call.path === '/root/README.md')).toBe(true);
+});
+
 test('会话授权失败后可重试，文件操作保持禁用', async ({ page }) => {
   await fileFixture(page);
   await page.route('**/api/session', (route) => route.fulfill({ status: 403, json: { error: '会话授权失败，请重新登录。' } }));

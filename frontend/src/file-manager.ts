@@ -1,4 +1,5 @@
 import type { FileListView } from './file-list-view';
+import { isEditableFile } from './file-kind';
 
 export const MAX_SFTP_FILE_SIZE = 64 * 1024 * 1024;
 export const SFTP_UPLOAD_CHUNK_SIZE = 64 * 1024;
@@ -1176,9 +1177,15 @@ export class FileManager {
     if (!entry) return;
     if (entry.type === 'directory' || entry.type === 'symlink') {
       this.navigate(joinPath(this.cwd, entry.name));
-    } else {
-      this.downloadSelected();
+      return;
     }
+    // 常见文本格式（文档 / 源码 / 配置）双击直接进在线编辑器；图片、压缩包、
+    // PDF 以及其他二进制文件仍然走下载。超出编辑器体积上限时退回下载。
+    if (isEditableFile(entry) && !exceedsEditorLimit(entry.size)) {
+      this.openEditor();
+      return;
+    }
+    this.downloadSelected();
   }
 
   private async createDirectory(): Promise<void> {

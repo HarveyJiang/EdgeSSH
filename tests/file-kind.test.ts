@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fileKind, fileKindPaths } from '../frontend/src/file-kind.ts';
+import { fileKind, fileKindPaths, isEditableFile } from '../frontend/src/file-kind.ts';
 
 test('文件夹和链接优先使用协议类型，不受扩展名影响', () => {
   assert.equal(fileKind({ name: 'backup.zip', type: 'directory' }), 'folder');
@@ -28,4 +28,16 @@ test('每种类型都提供非空 SVG 路径', () => {
     assert.ok(paths.length > 0);
     assert.ok(paths.every((path) => path.startsWith('M') || path.startsWith('m')));
   }
+});
+
+test('双击默认在线编辑的选择只覆盖文本类文件', () => {
+  for (const name of ['README.md', 'app.log', 'deploy.sh', 'main.py', 'compose.yaml', '.env.production', 'Dockerfile']) {
+    assert.equal(isEditableFile({ name, type: 'file' }), true, name);
+  }
+  for (const name of ['report.pdf', 'icon.png', 'bundle.tar.gz', 'data.bin', 'notes.docx', 'no-extension']) {
+    assert.equal(isEditableFile({ name, type: 'file' }), false, name);
+  }
+  assert.equal(isEditableFile({ name: 'app.sh', type: 'directory' }), false);
+  assert.equal(isEditableFile({ name: 'app.sh', type: 'symlink' }), false);
+  assert.equal(isEditableFile({ name: 'app.sh', type: 'other' }), false);
 });
