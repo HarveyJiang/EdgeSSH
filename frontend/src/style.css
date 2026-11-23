@@ -3869,7 +3869,8 @@ button:disabled {
   color: var(--text);
   font: 12px/1.6 var(--mono);
   tab-size: 4;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow: auto;
   scrollbar-width: thin;
 }
@@ -3945,9 +3946,15 @@ button:disabled {
   }
 
   .file-editor-input {
+    /* 满屏布局下由 flex 占满剩余空间，长内容由内部滚动处理；
+       flex-basis 用 0 而不是 auto，避免内容高度把 textarea 撑爆。 */
+    flex: 1 1 0;
+    min-height: 0;
     height: auto;
     padding: 12px;
     font-size: 16px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .file-editor-actions {
