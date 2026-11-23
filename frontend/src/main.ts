@@ -2574,6 +2574,16 @@ async function reconnectCurrentSession(): Promise<void> {
   // A live or already-dialing session has nothing to reclaim; connect() itself
   // reuses live targets, so the states that do have something to do are skipped.
   if (state === 'connected' || state === 'connecting' || state === 'disconnecting') return;
+
+  // Restore the saved connection info in the form before connecting,
+  // otherwise validateConnectForm fails with "请检查必填项和字段格式" because
+  // the form was cleared on disconnect and password field is empty.
+  if (ctx.reconnectParams?.host) {
+    ui.host.value = ctx.reconnectParams.host;
+    ui.port.value = String(ctx.reconnectParams.port ?? 22);
+    ui.username.value = ctx.reconnectParams.username ?? 'root';
+  }
+
   try {
     await connect();
   } catch (error) {
