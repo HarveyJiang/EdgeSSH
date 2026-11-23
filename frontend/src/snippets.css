@@ -64,7 +64,7 @@ body[data-view='snippets'] { overflow-y: auto; background: var(--home-bg); }
   right: 0;
   width: 320px;
   max-width: min(320px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 70px));
+  max-height: min(520px, calc(100dvh - 70px));
   border: 1px solid var(--snip-border);
   border-radius: 12px;
   box-shadow: var(--shadow);

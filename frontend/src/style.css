@@ -2640,7 +2640,7 @@ button:disabled {
 
 .terminal-card:fullscreen {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   border: 0;
   border-radius: 0;
 }
@@ -3680,7 +3680,7 @@ button:disabled {
   .host-key-dialog,
   .process-kill-dialog {
     width: min(94vw, 520px);
-    max-height: min(90vh, 640px);
+    max-height: min(90dvh, 640px);
     margin: 0;
   }
 
